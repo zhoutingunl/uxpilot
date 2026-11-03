@@ -2,30 +2,25 @@
 
 UX Pilot separates task planning, browser exploration, deterministic verification, UX judgement, and source localization. The default models are GLM-5.3 Flash with MiniMax-M3.1 Flash fallback. All roles use separate requests and bounded inputs; the Explorer never receives source code or private success assertions.
 
-```mermaid
-flowchart TD
-    U[Repository path or Git URL + live demo URL] --> R[Read-only repository intake]
-    U --> D[Landing-page observation]
-    R -->|Limited README and product docs| P[Task planner]
-    D -->|Visible page and screenshot| P
-    P --> C[Reusable project.yaml]
-    C --> E[Explorer LLM]
-    E -->|Validated single action| B[Playwright browser runtime]
-    B -->|Next screenshot and observed controls| E
-    B --> S[Evidence store]
-    B --> V[Independent deterministic verifier]
-    S --> M[Original and compact native video]
-    M --> J[Independent UX Judge]
-    V --> J
-    S --> J
-    J --> G[Schema and evidence-reference gate]
-    G --> L[Post-review source localization]
-    R -->|Bounded matching snippets| L
-    L --> Q[Validate path + line + quoted text]
-    G --> O[Markdown / HTML / JSON report]
-    Q --> O
-    O --> H[Human triage and future regression]
+## Layered overview · 分层架构全景
+
+![UX Pilot layered architecture: main workflow, recovery workflow and nine responsibility layers](diagrams/architecture.png)
+
+[Full-resolution PNG](diagrams/architecture.png) · [Vector SVG](diagrams/architecture.svg) · [Local zoomable viewer](diagrams/architecture.html) · [Editable diagram content](diagrams/architecture.json)
+
+The two top bands describe the main evaluation flow and evidence reuse. The nine layers group responsibilities: project intake, planning/orchestration, browser execution, evidence/media, verification/judgement, model providers, source localization, reporting/review, and cross-cutting policy/engineering quality. They are logical boundaries within the current Python CLI implementation, not separately deployed services. Purple cards indicate LLM roles; the tinted adapter card is optional DuckKing behavior. Source lookup follows UX judgement.
+
+The HTML viewer opens locally and supports fit-to-window/full-size viewing and downloads. GitHub renders the PNG/SVG; it does not execute the HTML viewer. The diagram is generated from JSON with SVG text and vector icons, so labels remain editable and the SVG can be enlarged.
+
+To regenerate both image formats after editing the JSON:
+
+```bash
+uv run python scripts/render_architecture.py
+# Generate SVG/HTML only without launching a browser:
+uv run python scripts/render_architecture.py --svg-only
 ```
+
+PNG rendering uses Playwright and installed Chrome, or `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. Use a CJK-capable system font for Chinese labels. No model calls or network requests are needed to render the documentation.
 
 ## Components
 

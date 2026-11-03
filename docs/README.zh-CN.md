@@ -2,6 +2,10 @@
 
 提供**代码仓库地址（或本地目录）+ 线上演示地址**，即可自动规划体验目标、操作网页、保存截图/视频、独立评审并生成修改候选。默认模型是智谱 GLM-5.3 Flash，备用 MiniMax-M3.1 Flash。
 
+[![UX Pilot 分层架构图](diagrams/architecture.png)](architecture.md)
+
+[查看矢量全图](diagrams/architecture.svg) · [PNG 原图](diagrams/architecture.png)
+
 ```bash
 uv sync --frozen
 uv run uxpilot review \
