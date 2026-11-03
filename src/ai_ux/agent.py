@@ -14,6 +14,7 @@ from .browser import BrowserRuntime
 from .evidence import Evidence
 from .llm import LLM, LLMError
 from .media import review_video, split_review_video
+from .replay import render_replay
 from .report import aggregate, render
 from .repository import Repository, prepare_repository
 from .schema import Action, Config, Judgement, StrictModel, Task
@@ -199,6 +200,7 @@ async def run_task(
     llm = LLM(config.models, on_call=lambda c: evidence.event("model_call", **c))
     result = {
         "run_id": run_id,
+        "replay_path": "replay.html",
         "task_id": task.id,
         "attempt": attempt,
         "goal": task.goal,
@@ -220,6 +222,7 @@ async def run_task(
             result["deployment"] = None
     try:
         async with asyncio.timeout(task.timeout_seconds):
+            evidence.event("stage", stage="browser", status="running")
             await runtime.start()
             for step in range(task.max_steps):
                 observation = await runtime.observe(step)
@@ -250,7 +253,13 @@ async def run_task(
                     result["stop_reason"] = "explorer_done"
                     break
                 response = await runtime.perform(decision)
-                evidence.event("agent_action_result", step=step, **response)
+                evidence.event(
+                    "agent_action_result",
+                    step=step,
+                    action_kind=decision.kind,
+                    target=decision.target,
+                    **response,
+                )
                 history.append({"action": decision.model_dump(), "result": response})
                 if len(history) >= 3 and all(not h["result"]["ok"] for h in history[-3:]):
                     result["stop_reason"] = "consecutive_action_errors"
@@ -268,6 +277,7 @@ async def run_task(
     except Exception as e:
         result["stop_reason"] = "runtime_error"
         result["error"] = str(e)[:1000]
+        evidence.event("stage_error", stage="browser", error=result["error"])
     finally:
         if runtime.page and not runtime.page.is_closed() and verification["task_outcome"] == "not_verified":
             try:
@@ -275,6 +285,7 @@ async def run_task(
             except Exception:
                 pass
         evidence.write("verification.json", verification)
+        evidence.event("verification", result=verification)
         try:
             await runtime.finish()
         except Exception as e:
@@ -290,6 +301,7 @@ async def run_task(
     try:
         if evidence.observations and result["stop_reason"] != "interrupted":
             log(f"[{run_id}] independent judge: video={runtime.video_info.get('status')}", flush=True)
+            evidence.event("stage", stage="judge", status="running")
             judgement, call = await judge_run(
                 llm,
                 evidence,
@@ -302,8 +314,10 @@ async def run_task(
     except Exception as e:
         result["judge_status"] = "failed"
         result["judge_error"] = str(e)
+        evidence.event("stage_error", stage="judge", error=str(e))
     if repository and result.get("judge_status") == "completed":
         try:
+            evidence.event("stage", stage="source_localization", status="running")
             result["source_mapping"] = await locate_sources(repository, evidence, result["judgement"], llm)
         except Exception as e:
             result["source_mapping"] = {"status": "failed", "error": str(e)[:500]}
@@ -314,6 +328,8 @@ async def run_task(
     result["observation_count"] = len(evidence.observations)
     evidence.write("model-calls.json", llm.calls)
     evidence.write("run.json", result)
+    result["replay_path"] = render_replay(evidence.root, result)
+    evidence.write("run.json", result)
     evidence.manifest()
     return result
 
@@ -323,6 +339,7 @@ async def evaluate(
     task_ids: list[str] | None = None,
     repeats: int | None = None,
     repository: Repository | None = None,
+    report_base_url: str | None = None,
 ):
     tasks = [t for t in config.tasks if not task_ids or t.id in task_ids]
     if task_ids and set(task_ids) - {t.id for t in tasks}:
@@ -340,6 +357,7 @@ async def evaluate(
         "adapter": config.app.adapter,
         "target_url": config.app.base_url,
         "repository": repository.metadata() if repository else None,
+        "analysis_replay_url": report_base_url,
         "runs": [],
         "issues": [],
     }
@@ -421,6 +439,8 @@ async def rejudge(config: Config, root: Path):
     result["model_calls"].extend(llm.calls)
     result["duration_ms"] = evidence.ms()
     evidence.write("model-calls.json", result["model_calls"])
+    evidence.write("run.json", result)
+    result["replay_path"] = render_replay(evidence.root, result)
     evidence.write("run.json", result)
     evidence.manifest()
     batch_path = root.parent / "report.json"

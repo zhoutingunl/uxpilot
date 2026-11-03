@@ -27,8 +27,8 @@
       "color": "purple",
       "cards": [
         {"title": "07  源码定位层", "lines": ["评审后检索相关代码片段", "核验路径 / 行号 / 引用原文"], "module": "repository.py · source_map.py"},
-        {"title": "08  报告与复核层", "lines": ["HTML / Markdown / JSON", "精确去重 · 复现步骤与验收条件"], "module": "report.py · agent.py"},
-        {"title": "09  策略与质量层", "lines": ["域名范围 / 敏感过滤 / 运行预算", "单测与本地集成 · CI 覆盖率"], "module": "policy.py · tests/ · GitHub Actions"}
+        {"title": "08  报告与复核层", "lines": ["FastAPI 工作台 / 报告 / JSON", "分析回放 · 精确去重 · 验收条件"], "module": "report.py · agent.py"},
+        {"title": "09  策略与质量层", "lines": ["SQLite 异步队列 / 错误聚类 / 统计", "部署记录 · 测试 · CI 覆盖率"], "module": "policy.py · tests/ · GitHub Actions"}
       ]
     }
   ],

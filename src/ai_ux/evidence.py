@@ -3,10 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .policy import scrub
+
+EVENT_SINK = ContextVar("uxpilot_event_sink", default=None)
 
 
 class Evidence:
@@ -45,9 +48,13 @@ class Evidence:
         if len(self.events) >= self.max_events:
             self.dropped_events += 1
             return
+        event["sequence"] = len(self.events)
         self.events.append(event)
         with (self.root / "events.jsonl").open("a") as f:
             f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        sink = EVENT_SINK.get()
+        if sink:
+            sink(self.root, self.wall_started, event)
 
     def write(self, path: str, data):
         target = self.root / path

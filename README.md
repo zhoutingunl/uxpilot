@@ -8,15 +8,32 @@ uv run playwright install chromium
 uv run uxpilot review \
   --repo https://github.com/markedjs/marked.git \
   --url https://marked.js.org/demo/
+
+# 启动异步网站工作台
+uv run uxpilot-web
 ```
 
 Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/), Chrome (default), and `ffmpeg`/`ffprobe`. Install Chrome if it is not present (`uv run playwright install chrome`). Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a browser executable, or configure `browser.channel: null` to use Playwright's bundled Chromium. The `ai-ux` command remains an alias.
 
-[中文说明](docs/README.zh-CN.md) · [Architecture](docs/architecture.md) · [Validation](docs/validation.md) · [Coverage](docs/coverage.md)
+[中文说明](docs/README.zh-CN.md) · [异步工作台](docs/workbench.md) · [Architecture](docs/architecture.md) · [Validation](docs/validation.md) · [Coverage](docs/coverage.md)
 
 [![UX Pilot layered system architecture](docs/diagrams/architecture.png)](docs/architecture.md)
 
 [16:9 PNG for slides](docs/diagrams/architecture.png) · [Vector SVG](docs/diagrams/architecture.svg) · [Detailed overview](docs/diagrams/architecture-detail.png) · [Implementation status](docs/design-implementation-status.md)
+
+## Async workbench
+
+`uvicorn ai_ux.webapp:app` starts an SQLite-backed async workbench. The home page accepts a repository URL/path, live demo URL, optional goal, task count and repeats. Jobs claim one worker lock, survive page refreshes, and mark in-flight work `interrupted` after process restart; they never convert an interrupted run to success.
+
+Pages:
+
+- `/` submits a review and lists recent jobs.
+- `/jobs` shows stage progress, cancellation, events, report links and analysis replay.
+- `/stats` shows daily submissions, queue/execution/total latency distributions, model calls, known/unknown token counts and daily token totals.
+- `/errors` clusters model/browser/page errors by tool, category and normalized signature; repeated deterministic clusters are marked candidates and can be triaged in batches (`open`, `investigating`, `fixed`, `ignored`).
+- `/deploys` displays explicit release records, commit links, checks and coverage. Development startup is shown as development and does not create a success deployment.
+
+Set `UXPILOT_DATA_DIR` for durable state, `UXPILOT_WORKERS` (default 1), `UXPILOT_MAX_QUEUED`, `UXPILOT_LOCAL_ROOTS` for allowed local repositories, and `UXPILOT_ALLOW_LOCAL=1` only for trusted local test environments. Public web mode validates public demo/repository hosts and allows only public GET/HEAD subresources; it is not a full network sandbox. Use a reverse proxy, authentication and a dedicated test account before exposing the workbench beyond localhost.
 
 ## Model configuration
 

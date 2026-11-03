@@ -18,6 +18,18 @@ uv run uxpilot review \
 
 密钥读取环境变量 `ZHIPU_API_KEY`、`MINIMAX_CN_API_KEY`，或仓库外的 `~/.secrets/zhipu_api_key`、`~/.secrets/minimax_api_key`；不写入报告。运行会消耗模型额度。
 
+## 异步工作台
+
+```bash
+uv run uxpilot-web
+```
+
+打开 `http://127.0.0.1:8088/`，输入仓库地址和演示地址后后台异步运行。任务、阶段事件和报告保存到 `UXPILOT_DATA_DIR` 的 SQLite；进程重启会把运行中的任务标记为中断并保留证据。
+
+`/jobs` 查看实时进度和分析回放，`/stats` 查看每日提交数、排队/执行/总耗时分布、模型调用和 token 用量，`/errors` 按工具、类别和归一化签名聚类错误并批量标记处理状态，`/deploys` 查看明确记录的发布版本、提交、验收检查和覆盖率。开发启动显示为 development，不会冒充成功发布。
+
+生产使用前需在反向代理层增加认证，配置持久数据目录和测试账号；公网模式只允许公共目标和只读资源，不是完整网络沙箱。
+
 ## 常用方式
 
 ```bash
