@@ -1,0 +1,106 @@
+app:
+  name: DuckKing
+  base_url: https://duck.qbox.net/
+  allowed_hosts: [duck.qbox.net]
+  environment: production_evaluation
+  production_evaluation_authorized: true
+  adapter: duckking
+  source_repo: null  # Optional local checkout; e.g. /path/to/DuckKing
+models:
+  primary:
+    name: zhipu
+    model: glm-5.3-Flash
+    endpoint: https://open.bigmodel.cn/api/coding/paas/v4/chat/completions
+    key_env: ZHIPU_API_KEY
+    key_file: ~/.secrets/zhipu_api_key
+    timeout_seconds: 240
+    max_tokens: 8192
+    request_options:
+      thinking: {type: disabled}
+  fallback:
+    name: minimax
+    stream: false
+    video_chunk_seconds: 4
+    model: MiniMax-M3.1-Flash
+    endpoint: https://api.minimaxi.com/v1/chat/completions
+    key_env: MINIMAX_CN_API_KEY
+    key_file: ~/.secrets/minimax_api_key
+    timeout_seconds: 240
+    max_tokens: 16384
+    request_options:
+      thinking: {type: adaptive}
+      reasoning_split: true
+      reasoning_effort: low
+  validation_retries: 1
+  max_calls_per_run: 32
+browser:
+  channel: chrome
+  headless: true
+  width: 1440
+  height: 1050
+  video: true
+  video_max_seconds: 600
+output_dir: ../artifacts/agent
+tasks:
+  - id: first-nod
+    goal: 第一次打开 DuckKing，让小鸭点头，并确认你看见了动作和完成反馈。
+    max_steps: 8
+    timeout_seconds: 300
+    assertions:
+      - {id: model-visible, kind: model_ready}
+      - {id: nod-complete, kind: action_completed, action_name: nod}
+      - {id: visible-before-action, kind: model_before_action, required: false}
+  - id: local-voice
+    goal: 使用本地优先语音，让小鸭点头。确认识别结果、动作和本轮反馈后结束。
+    max_steps: 12
+    timeout_seconds: 420
+    audio:
+      path: ../fixtures/audio/nod-loop.wav
+      transcript: 点头。
+      hold_ms: 3200
+    assertions:
+      - {id: model-visible, kind: model_ready}
+      - {id: local-text, kind: voice_transcript, source: local, role: user, contains: 点头}
+      - {id: nod-complete, kind: action_completed, action_name: nod}
+  - id: cloud-voice
+    goal: 使用灵矽云端语音，让小鸭先点头再向前走。确认两项动作完成并收到回答。
+    max_steps: 14
+    timeout_seconds: 480
+    audio:
+      path: ../fixtures/audio/sequence-loop.wav
+      transcript: 先点头，再向前走。
+    assertions:
+      - {id: model-visible, kind: model_ready}
+      - {id: cloud-text, kind: voice_transcript, source: cloud, role: user, contains: 点头}
+      - {id: nod-complete, kind: action_completed, action_name: nod}
+      - {id: walk-complete, kind: action_completed, action_name: walk}
+      - {id: response-audio, kind: audio_received}
+  - id: fallback-chat
+    goal: 选择本地优先语音，问小鸭它现在感觉怎么样；等待回答后检查页面是否清楚地表明这一轮已经结束。
+    max_steps: 14
+    timeout_seconds: 480
+    audio:
+      path: ../fixtures/audio/chat-loop.wav
+      transcript: 你好小鸭，你现在感觉怎么样？
+    assertions:
+      - {id: local-text, kind: voice_transcript, source: local, role: user}
+      - {id: cloud-answer, kind: voice_transcript, source: cloud, role: assistant}
+      - {id: response-audio, kind: audio_received}
+  - id: kick-ball
+    start_path: /scenarios.html
+    goal: 找到踢球场景，让小鸭用左脚踢球，看见过程并找到实际触球和位移结果。
+    max_steps: 12
+    timeout_seconds: 420
+    assertions:
+      - {id: model-visible, kind: model_ready}
+      - {id: kick-complete, kind: action_completed, action_name: kick_left}
+      - {id: left-contact, kind: text, selector: '#ball-contact', contains: 左脚}
+      - {id: visible-before-action, kind: model_before_action, required: false}
+  - id: mobile-nod
+    goal: 在手机上让小鸭点头，并评价操作时是否能同时看见小鸭的反应。
+    max_steps: 10
+    timeout_seconds: 360
+    browser: {channel: chrome, width: 390, height: 844, video: true, video_max_seconds: 600}
+    assertions:
+      - {id: nod-complete, kind: action_completed, action_name: nod}
+      - {id: visible-controls, kind: viewport_overlap, selector: '#viewport', other_selector: '[data-action=nod]', required: false}

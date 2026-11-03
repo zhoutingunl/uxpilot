@@ -1,0 +1,42 @@
+name: test-and-coverage
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: '3.12'
+      - run: uv sync --frozen
+      - run: uv run playwright install --with-deps chrome
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - name: Tests with statement and branch coverage
+        run: >-
+          uv run pytest -q --cov=ai_ux --cov-branch --cov-fail-under=80
+          --cov-report=term-missing
+          --cov-report=html:artifacts/coverage/html
+          --cov-report=json:artifacts/coverage/coverage.json
+          --cov-report=xml:artifacts/coverage/coverage.xml
+          --junitxml=artifacts/coverage/junit.xml
+      - run: uv build
+      - name: Upload coverage and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-python312
+          path: artifacts/coverage/
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
