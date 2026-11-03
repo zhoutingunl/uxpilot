@@ -315,6 +315,14 @@ class BrowserRuntime:
         await self.page.screenshot(
             path=str(self.evidence.root / result["screenshot"]), animations="disabled", timeout=10000
         )
+        self.evidence.event(
+            "observation",
+            step=step,
+            url=result["url"],
+            screenshot=result["screenshot"],
+            evidence_ref=result["evidence_ref"],
+            visible_controls=len(result["nodes"]),
+        )
         self.evidence.observations.append(result)
         self.evidence.write(result["evidence_ref"], result)
         return result

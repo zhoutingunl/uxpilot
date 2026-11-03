@@ -17,6 +17,7 @@ from .defaults import default_models
 from .evidence import Evidence
 from .llm import LLM
 from .policy import Policy, scrub
+from .replay import render_replay
 from .repository import prepare_repository
 from .schema import App, Assertion, Browser, Config, Models, StrictModel, Task
 
@@ -112,6 +113,7 @@ async def discover(
         observation = await runtime.observe(0)
     finally:
         await runtime.finish()
+    evidence.event("stage", stage="planning", status="running")
     llm = LLM(models, on_call=lambda c: evidence.event("model_call", **c))
     try:
         data = {
@@ -167,4 +169,8 @@ async def discover(
     finally:
         evidence.write("model-calls.json", llm.calls)
         await llm.close()
+        render_replay(
+            evidence.root,
+            {"task_id": "discovery", "goal": "任务规划与首页观察", "stop_reason": "planning_finished"},
+        )
         evidence.manifest()

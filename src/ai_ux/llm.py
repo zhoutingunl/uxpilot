@@ -6,6 +6,7 @@ import json
 import os
 import re
 import time
+import uuid
 from pathlib import Path
 from typing import TypeVar
 
@@ -190,6 +191,7 @@ class LLM:
                 if len(self.calls) >= self.config.max_calls_per_run:
                     raise LLMError("model_call_budget_exhausted")
                 record = {
+                    "call_id": uuid.uuid4().hex,
                     "provider": provider.name,
                     "model": provider.model,
                     "purpose": purpose,
@@ -200,6 +202,7 @@ class LLM:
                 started = time.monotonic()
                 try:
                     raw, usage = await self._request(provider, messages)
+                    record["usage"] = usage
                     result = schema.model_validate(parse_json(raw))
                     record.update(status="ok", usage=usage)
                     return result, record

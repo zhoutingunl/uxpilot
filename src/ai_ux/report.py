@@ -6,6 +6,8 @@ import json
 import re
 from pathlib import Path
 
+from .replay import render_batch_replay
+
 
 def aggregate(runs: list[dict]):
     """Exact normalized issue matching; never inflate confirmation from retries of one run."""
@@ -29,9 +31,15 @@ def aggregate(runs: list[dict]):
 
 
 def render(root: Path, report: dict):
+    report["analysis_replay"] = "analysis-replay.html"
+    for run in report["runs"]:
+        run["analysis_replay"] = f"{run['run_id']}/replay.html"
+    render_batch_replay(root, report)
     (root / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     lines = [
         f"# {report.get('app_name', 'Web 产品')} AI UX Agent 体验报告",
+        "",
+        f"[分析回放：人工审核全过程]({report.get('analysis_replay_url', 'analysis-replay.html')})",
         "",
         f"运行批次：{report['batch_id']}。目标：{report['target_url']}。",
         "",
@@ -71,7 +79,7 @@ def render(root: Path, report: dict):
         if r.get("error"):
             lines += [f"运行错误：{r['error']}", ""]
         lines += [
-            f"[逐步事件]({r['run_id']}/events.jsonl) · [独立验收]({r['run_id']}/verification.json) · [模型调用]({r['run_id']}/model-calls.json)",
+            f"[分析回放]({r['run_id']}/replay.html) · [逐步事件]({r['run_id']}/events.jsonl) · [独立验收]({r['run_id']}/verification.json) · [模型调用]({r['run_id']}/model-calls.json)",
             "",
         ]
         if r.get("video", {}).get("status") == "ready":
@@ -133,6 +141,8 @@ def render(root: Path, report: dict):
     (root / "report.md").write_text(markdown)
     # Minimal standalone report, escaping all model/user strings; links served locally, no external assets.
     body = [f"<h1>AI UX Agent 体验报告</h1><p>{html.escape(report['batch_id'])}</p>"]
+    replay_href = report.get("analysis_replay_url") or "analysis-replay.html"
+    body.append(f'<p><a href="{html.escape(replay_href, quote=True)}">分析回放 · 人工审核过程</a></p>')
     body.append('<p><a href="report.md">Markdown 报告</a> · <a href="report.json">JSON 报告</a></p>')
     for r in report["runs"]:
         rid = html.escape(r["run_id"], quote=True)
@@ -147,7 +157,7 @@ def render(root: Path, report: dict):
                     f'<p>评审精简版；<a href="{rid}/session.mp4">原始完整视频</a> · <a href="{rid}/video-timeline.json">时间映射</a></p>'
                 )
         body.append(
-            f'<p><a href="{rid}/run.json">运行证据</a> · <a href="{rid}/verification.json">验收</a></p></section>'
+            f'<p><a href="{rid}/replay.html">分析回放</a> · <a href="{rid}/run.json">运行证据</a> · <a href="{rid}/verification.json">验收</a></p></section>'
         )
     for i in report["issues"]:
         body.append(
