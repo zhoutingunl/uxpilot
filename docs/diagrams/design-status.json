@@ -1,0 +1,43 @@
+{
+  "version": "UX Pilot v0.2 · 2026-11-03",
+  "title": "原设计实现状态 · 角色与执行架构",
+  "subtitle": "基于当前代码核对；角色名称、评审维度和实际专用 Agent 分开判断",
+  "orchestration": [
+    {"title": "任务规划", "status": "implemented", "detail": "仓库文档 + 首页观察 → 用户目标 / project.yaml"},
+    {"title": "角色调度", "status": "missing", "detail": "无三类角色注册、自动分配、并行调度或结果对照"},
+    {"title": "执行控制", "status": "implemented", "detail": "串行任务 / 重复运行 / 步数与超时 / 清理与重评"}
+  ],
+  "roles": [
+    {"title": "新手 Agent", "subtitle": "首次使用体验", "status": "partial", "lines": ["默认新手 persona + 同一个 Explorer", "已有自主探索；无独立新手策略与角色验证"]},
+    {"title": "熟练 Agent", "subtitle": "效率与一致性", "status": "missing", "lines": ["没有专用熟练 Agent 或角色路径基线", "Judge 有评价维度，可手工配置任务 / persona"]},
+    {"title": "异常 Agent", "subtitle": "错误与恢复", "status": "missing", "lines": ["没有异常角色调度或产品故障注入引擎", "已有错误留证、重试 / 回退与重新评审"]}
+  ],
+  "runtime": [
+    {"title": "真实浏览器操作", "status": "implemented", "detail": "Playwright + 自建 BrowserRuntime"},
+    {"title": "截图 / 视频 / 事件", "status": "implemented", "detail": "视口截图、无声 MP4、events.jsonl"},
+    {"title": "Playwright Trace", "status": "missing", "detail": "未启动 tracing；无 trace.zip"},
+    {"title": "网络 / Console", "status": "partial", "detail": "错误与计时；不是全量 HAR / 日志"}
+  ],
+  "judge": [
+    {"title": "发现体验问题", "status": "implemented", "detail": "独立上下文读取真实轨迹与视频"},
+    {"title": "分析证据", "status": "implemented", "detail": "JSON Schema + 证据引用检查"},
+    {"title": "去重", "status": "partial", "detail": "Python 精确标题聚合；无语义去重"},
+    {"title": "评分", "status": "partial", "detail": "P0–P3 + 置信度；无数值 UX 总分"}
+  ],
+  "footer": [
+    "当前是一个按 task/persona 配置的 Explorer；不是三个独立角色 Agent 的调度平台。",
+    "已运行的报告链路：体验 → 独立验收 → 视频 Judge → 源码候选 → 人工复核。"
+  ],
+  "component_title": "原设计实现状态 · 组件与技术选型",
+  "component_subtitle": "能力可由不同技术实现；“未采用推荐项目”不等于“相关能力未实现”",
+  "components": [
+    {"component": "自主操作浏览器", "recommended": "Browser Use", "status": "alternative", "label": "能力已实现 · 库未采用", "lines": ["自建 LLM Explorer + Playwright，按目标自主操作。", "没有 browser-use 依赖或集成。"]},
+    {"component": "浏览器证据采集", "recommended": "Playwright", "status": "partial", "lines": ["截图、视频、事件、请求 / HTTP 错误、资源计时、warning/error。", "未实现 Trace / HAR；没有全量 HTTP 与 Console 录制。"]},
+    {"component": "UX 评审", "recommended": "LLM + 自定义 Judge", "status": "implemented", "lines": ["GLM-5.3 Flash 主模型，MiniMax-M3.1 Flash 备用。", "独立上下文、原生视频审查、证据校验与修改候选。"]},
+    {"component": "结构化结果", "recommended": "Pydantic", "status": "implemented", "lines": ["配置、任务、动作、Judge 和源码定位结果类型化。", "模型 JSON 校验失败时有上限地重试。"]},
+    {"component": "修复 Agent", "recommended": "Codex CLI", "status": "missing", "lines": ["目前只有只读源码定位与修改建议。", "没有调用 Codex CLI、修改代码、修复分支或 PR。"]},
+    {"component": "工作流", "recommended": "Python + GitLab CI", "status": "partial", "label": "部分实现 · GitLab 未采用", "lines": ["Python 串行编排与状态保存已实现；实际为 GitHub Actions。", "CI 仅测试 / 覆盖率 / 构建；未自动触发部署后的 UX eval。"]},
+    {"component": "可选替代方案", "recommended": "Stagehand", "status": "not_adopted", "lines": ["没有集成该库或混合执行适配器。", "当前由自建 Explorer 操作循环承担。"]},
+    {"component": "可选 Agent 平台", "recommended": "OpenHands", "status": "not_adopted", "lines": ["没有接入其多 Agent 执行与管理平台。", "当前角色以独立 LLM 请求和串行任务组织。"]}
+  ]
+}

@@ -6,21 +6,23 @@ UX Pilot separates task planning, browser exploration, deterministic verificatio
 
 ![UX Pilot layered architecture: main workflow, recovery workflow and nine responsibility layers](diagrams/architecture.png)
 
-[Full-resolution PNG](diagrams/architecture.png) · [Vector SVG](diagrams/architecture.svg) · [Local zoomable viewer](diagrams/architecture.html) · [Editable diagram content](diagrams/architecture.json)
+[16:9 PNG · 3840×2160](diagrams/architecture.png) · [Vector SVG](diagrams/architecture.svg) · [Local viewer](diagrams/architecture.html) · [Detailed portrait diagram](diagrams/architecture-detail.png) · [Design implementation status](design-implementation-status.md)
 
-The two top bands describe the main evaluation flow and evidence reuse. The nine layers group responsibilities: project intake, planning/orchestration, browser execution, evidence/media, verification/judgement, model providers, source localization, reporting/review, and cross-cutting policy/engineering quality. They are logical boundaries within the current Python CLI implementation, not separately deployed services. Purple cards indicate LLM roles; the tinted adapter card is optional DuckKing behavior. Source lookup follows UX judgement.
+The main diagram is now a **16:9 landscape overview for slides**. It retains the seven-step workflow and nine responsibility layers, arranged in three columns: project/execution, evidence/evaluation/models, and source/delivery/quality. Concise labels remain readable when inserted into a widescreen presentation. The full-detail portrait diagram is retained separately.
 
-The HTML viewer opens locally and supports fit-to-window/full-size viewing and downloads. GitHub renders the PNG/SVG; it does not execute the HTML viewer. The diagram is generated from JSON with SVG text and vector icons, so labels remain editable and the SVG can be enlarged.
+These are logical boundaries within the current Python CLI, not separately deployed services. Source lookup follows UX judgement. The bottom note marks role scheduling, Trace and the Codex repair loop as not yet implemented. The [two design status diagrams](design-implementation-status.md) give the item-by-item comparison.
 
-To regenerate both image formats after editing the JSON:
+GitHub renders PNG/SVG; the HTML viewer is for local use. Regenerate the landscape image from its [JSON content](diagrams/architecture-landscape.json):
 
 ```bash
+uv run python scripts/render_architecture_landscape.py
+# Full-detail portrait diagram:
 uv run python scripts/render_architecture.py
-# Generate SVG/HTML only without launching a browser:
-uv run python scripts/render_architecture.py --svg-only
+# Original-design implementation annotations:
+uv run python scripts/render_design_status.py
 ```
 
-PNG rendering uses Playwright and installed Chrome, or `PLAYWRIGHT_CHROMIUM_EXECUTABLE`. Use a CJK-capable system font for Chinese labels. No model calls or network requests are needed to render the documentation.
+Rendering uses Playwright and installed Chrome, or `PLAYWRIGHT_CHROMIUM_EXECUTABLE`, with a CJK-capable system font. It makes no model calls or network requests.
 
 ## Components
 

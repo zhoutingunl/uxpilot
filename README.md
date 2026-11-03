@@ -16,7 +16,7 @@ Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/), Chrome (default), a
 
 [![UX Pilot layered system architecture](docs/diagrams/architecture.png)](docs/architecture.md)
 
-[Open full-size diagram](docs/diagrams/architecture.svg)
+[16:9 PNG for slides](docs/diagrams/architecture.png) · [Vector SVG](docs/diagrams/architecture.svg) · [Detailed overview](docs/diagrams/architecture-detail.png) · [Implementation status](docs/design-implementation-status.md)
 
 ## Model configuration
 

@@ -1,0 +1,39 @@
+{
+  "title": "UX Pilot · 分层架构",
+  "subtitle": "仓库 + 演示地址 → 自主体验 → 视频评审 → 源码修改候选",
+  "version": "v0.2 · 当前实现",
+  "flow": ["接入项目", "规划任务", "自主体验", "独立验收", "视频评审", "关联源码", "输出报告"],
+  "columns": [
+    {
+      "label": "接入与执行",
+      "color": "blue",
+      "cards": [
+        {"title": "01  接入层", "lines": ["本地 / Git 仓库只读检出", "观察真实首页 · 生成项目配置"], "module": "cli.py · repository.py · discovery.py"},
+        {"title": "02  规划与编排层", "lines": ["用户目标 → Explorer 单步决策", "限制步数 / 时长 · 保留失败现场"], "module": "discovery.py · agent.py"},
+        {"title": "03  浏览器执行层", "lines": ["Playwright · 隔离上下文", "有界 UI 操作 · 可选产品适配"], "module": "browser.py · policy.py"}
+      ]
+    },
+    {
+      "label": "证据、验收与模型",
+      "color": "teal",
+      "cards": [
+        {"title": "04  证据与媒体层", "lines": ["截图 / 事件 / 原始无声录屏", "精简视频 + 显式时间映射"], "module": "evidence.py · media.py"},
+        {"title": "05  验证与评审层", "lines": ["同运行确定性验收 + 独立 Judge", "事实 / 推断 / 建议 · 证据校验"], "module": "verifier.py · agent.py · schema.py"},
+        {"title": "06  AI 能力层", "lines": ["GLM-5.3 Flash → MiniMax 备用", "原生视频输入 · 有限重试 / 回退"], "module": "llm.py · defaults.py · probe.py"}
+      ]
+    },
+    {
+      "label": "源码、交付与工程质量",
+      "color": "purple",
+      "cards": [
+        {"title": "07  源码定位层", "lines": ["评审后检索相关代码片段", "核验路径 / 行号 / 引用原文"], "module": "repository.py · source_map.py"},
+        {"title": "08  报告与复核层", "lines": ["HTML / Markdown / JSON", "精确去重 · 复现步骤与验收条件"], "module": "report.py · agent.py"},
+        {"title": "09  策略与质量层", "lines": ["域名范围 / 敏感过滤 / 运行预算", "单测与本地集成 · CI 覆盖率"], "module": "policy.py · tests/ · GitHub Actions"}
+      ]
+    }
+  ],
+  "boundary": "当前交付：体验报告与源码修改候选；三类角色调度、Trace、Codex 修复闭环尚未实现。",
+  "note": "逻辑分层，非独立服务；单次候选需人工复核；页面健康不等于业务成功。",
+  "footer": "github.com/zhoutingunl/uxpilot",
+  "notes": "本页按三列、九层呈现当前 v0.2 架构。Explorer 不读取源码和私有断言；Judge 使用独立请求上下文。源码定位在体验评审后进行，行号与引用已核验不等于证明根因或部署一致。原生视频为无声录屏，2 fps 不验证高速动作或扬声器听感。MiniMax 使用连续短片读取兼容路径。网络与 Console 目前只有部分记录，未实现 Playwright Trace。默认新手 persona 不等于三个独立角色 Agent；尚无熟练/异常角色调度、Codex CLI 修复或部署后自动 UX eval。详细模块说明和状态对照见 docs/architecture.md 与 docs/design-implementation-status.md。"
+}

@@ -4,7 +4,7 @@
 
 [![UX Pilot 分层架构图](diagrams/architecture.png)](architecture.md)
 
-[查看矢量全图](diagrams/architecture.svg) · [PNG 原图](diagrams/architecture.png)
+[16:9 横版 PNG](diagrams/architecture.png) · [SVG 矢量版](diagrams/architecture.svg) · [详细长图](diagrams/architecture-detail.png) · [原设计实现状态](design-implementation-status.md)
 
 ```bash
 uv sync --frozen
