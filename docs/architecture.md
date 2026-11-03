@@ -10,6 +10,8 @@ UX Pilot separates task planning, browser exploration, deterministic verificatio
 
 The main diagram is now a **16:9 landscape overview for slides**. It retains the seven-step workflow and nine responsibility layers, arranged in three columns: project/execution, evidence/evaluation/models, and source/delivery/quality. Concise labels remain readable when inserted into a widescreen presentation. The full-detail portrait diagram is retained separately.
 
+For presentation views limited to delivered capabilities: [execution and review](diagrams/design-roles-implemented.png) · [actual components](diagrams/design-components-implemented.png). The [full design comparison](design-implementation-status.md) retains the original status diagrams.
+
 These are logical boundaries within the current Python CLI, not separately deployed services. Source lookup follows UX judgement. The bottom note marks role scheduling, Trace and the Codex repair loop as not yet implemented. The [two design status diagrams](design-implementation-status.md) give the item-by-item comparison.
 
 GitHub renders PNG/SVG; the HTML viewer is for local use. Regenerate the landscape image from its [JSON content](diagrams/architecture-landscape.json):

@@ -4,6 +4,25 @@
 
 图例：**已实现**＝对应能力在代码中可运行；**部分实现**＝只有设计的一部分；**未实现**＝没有该工作流；**未采用**＝没有集成这个可选技术，不表示相关能力一定缺失。已有能力和所推荐的具体组件分别判断。
 
+## 已实现能力版
+
+以下两张图只展示当前已落地能力，采用 16:9 横版（PNG 3200×1800），适合放入演示文稿。部分实现项只摘取已完成的范围，并使用实际技术名称；下方原始完整状态图继续保留。
+
+| 已实现能力视图 | PNG | SVG |
+|---|---|---|
+| 体验执行与评审 | [design-roles-implemented.png](diagrams/design-roles-implemented.png) | [矢量版](diagrams/design-roles-implemented.svg) |
+| 实际组件与用途 | [design-components-implemented.png](diagrams/design-components-implemented.png) | [矢量版](diagrams/design-components-implemented.svg) |
+
+![已实现架构：体验执行与评审](diagrams/design-roles-implemented.png)
+
+![已实现组件：实际技术与用途](diagrams/design-components-implemented.png)
+
+内容源：[design-implemented.json](diagrams/design-implemented.json)。重新生成：
+
+```bash
+uv run python scripts/render_design_implemented.py
+```
+
 ## 图 1：角色与执行架构
 
 ![角色与执行架构实现状态](diagrams/design-roles-status.png)

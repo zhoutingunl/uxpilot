@@ -1,0 +1,32 @@
+{
+  "version": "UX Pilot v0.2 · 已实现能力",
+  "roles_title": "已实现架构 · 体验执行与评审",
+  "roles_subtitle": "用户目标驱动的 Explorer，配合同一运行的独立验收与视频 Judge",
+  "orchestration": [
+    {"title": "任务规划", "icon": "sparkles", "lines": ["仓库文档 + 真实首页观察", "生成用户目标与 project.yaml"]},
+    {"title": "执行控制", "icon": "timer", "lines": ["串行任务 / 重复运行 / 预算", "停止、超时、清理与重评"]}
+  ],
+  "explorer": {"title": "Explorer Agent", "icon": "cursor", "lines": ["task / persona 可配置 · 默认首次使用者", "观察页面与截图 → 选择一个动作 → 核对反馈"]},
+  "runtime": [
+    {"title": "真实浏览器操作", "icon": "cursor", "lines": ["点击 / 输入 / 选择 / 键盘", "滚动 / 等待 / 导航 / 刷新"]},
+    {"title": "截图、视频与事件", "icon": "video", "lines": ["视口截图 / 无声录屏", "events.jsonl + 时间映射"]},
+    {"title": "错误与资源观测", "icon": "globe", "lines": ["请求 / HTTP 错误、资源计时", "Console warning/error、pageerror"]}
+  ],
+  "evaluation": [
+    {"title": "独立确定性验收", "icon": "check", "lines": ["同运行旁路检查页面与业务条件", "页面健康与任务验收分别记录"]},
+    {"title": "UX Judge Agent", "icon": "sparkles", "lines": ["独立上下文读取视频和实际轨迹", "分析证据，输出问题、推断与建议"]},
+    {"title": "结构化聚合与报告", "icon": "document", "lines": ["Pydantic 校验 / 精确标题去重", "P0–P3 严重度与证据置信度"]}
+  ],
+  "roles_footer": "输出：体验报告 · 复现步骤 · 源码修改候选 · 回归验收条件",
+  "components_title": "已实现组件 · 实际技术与用途",
+  "components_subtitle": "展示当前采用的技术，以及已落地的功能范围",
+  "components": [
+    {"name": "自主操作浏览器", "technology": "自建 LLM Explorer + Playwright", "lines": ["根据自然语言目标与当前页面观察自主决策", "以观察到的控件 ID 执行有界 UI 操作"]},
+    {"name": "浏览器证据采集", "technology": "Playwright + 自建 Evidence / Media", "lines": ["截图、无声录屏、事件与视频时间映射", "请求 / HTTP 错误、资源计时及 Console warning/error"]},
+    {"name": "UX 评审", "technology": "GLM-5.3 Flash / MiniMax-M3.1 Flash", "lines": ["独立 Judge 原生视频评审与证据分析", "给出修改候选、严重度、复现步骤和验收条件"]},
+    {"name": "结构化结果", "technology": "Pydantic", "lines": ["配置、任务、动作、Judge 与源码定位结果类型化", "JSON Schema 校验与有限重试"]},
+    {"name": "工作流与工程验证", "technology": "Python + GitHub Actions", "lines": ["Python 串行编排、状态保存、重复运行与重评", "GitHub Actions 执行 lint、离线测试、覆盖率和构建"]}
+  ],
+  "components_footer": "报告链路：自主体验 → 证据采集 → 独立验收 → 视频 Judge → 源码候选 → 人工复核",
+  "footnote": "当前实现视图 · 详细能力与代码依据见 docs/design-implementation-status.md"
+}
