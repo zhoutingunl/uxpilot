@@ -1,5 +1,6 @@
 import time
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -111,7 +112,8 @@ def test_statistics_separates_queue_execution_total_and_unknown_tokens(tmp_path)
             "total_tokens": None,
         },
     ]
-    d = statistics(jobs, calls, date.today(), date.today())
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    d = statistics(jobs, calls, today, today)
     assert d["submitted"] == 2
     assert (
         d["total_seconds"]["count"] == 1
