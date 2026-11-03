@@ -1,0 +1,596 @@
+{
+  "title": "UX Pilot · Web 产品自动体验评测系统",
+  "subtitle": "仓库 + 演示地址 → 自主体验 → 视频评审 → 源码修改候选",
+  "version": "v0.2 · 当前实现",
+  "chips": [
+    [
+      "目标",
+      "发现有证据、可复现的使用与体验问题"
+    ],
+    [
+      "输入",
+      "本地目录 / Git URL + 线上演示 URL"
+    ],
+    [
+      "输出",
+      "体验报告 + 复现步骤 + 源码候选 + 验收条件"
+    ]
+  ],
+  "principles": [
+    "通用浏览器能力 + 可选产品适配器",
+    "GLM-5.3 Flash 主模型 · MiniMax-M3.1 Flash 备用",
+    "观察事实 / 推断 / 建议分开记录"
+  ],
+  "flows": [
+    {
+      "title": "主流程 · 从两个地址到可审查的体验报告",
+      "color": "#f26936",
+      "steps": [
+        {
+          "title": "接入项目",
+          "icon": "folder",
+          "lines": [
+            "源码只读检出",
+            "观察真实演示首页"
+          ]
+        },
+        {
+          "title": "规划任务",
+          "icon": "sparkles",
+          "lines": [
+            "产品用途与用户目标",
+            "生成 project.yaml"
+          ]
+        },
+        {
+          "title": "自主体验",
+          "icon": "cursor",
+          "lines": [
+            "观察 → 决策 → 操作",
+            "截图 / 事件 / 视频"
+          ]
+        },
+        {
+          "title": "独立验收",
+          "icon": "check",
+          "lines": [
+            "同一次运行旁路验证",
+            "页面健康 / 业务成功"
+          ]
+        },
+        {
+          "title": "视频评审",
+          "icon": "video",
+          "lines": [
+            "新上下文读取视频",
+            "生成 UX 修改候选"
+          ],
+          "tone": "ai"
+        },
+        {
+          "title": "关联源码",
+          "icon": "code",
+          "lines": [
+            "匹配相关代码片段",
+            "核验路径、行号与原文"
+          ]
+        },
+        {
+          "title": "输出报告",
+          "icon": "document",
+          "lines": [
+            "HTML / Markdown",
+            "JSON + 回归验收"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "恢复与复测 · 保留失败证据，按需复用已有结果",
+      "color": "#8062d6",
+      "steps": [
+        {
+          "title": "保存运行现场",
+          "icon": "archive",
+          "lines": [
+            "浏览器阶段 checkpoint",
+            "错误、超时与清理结果保留"
+          ]
+        },
+        {
+          "title": "仅重做评审",
+          "icon": "repeat",
+          "lines": [
+            "judge RUN_DIR 复用证据",
+            "旧评审进入 judge-history"
+          ]
+        },
+        {
+          "title": "重新定位源码",
+          "icon": "code",
+          "lines": [
+            "新问题重新匹配代码位置",
+            "不会沿用旧问题行号"
+          ]
+        },
+        {
+          "title": "按任务重复验证",
+          "icon": "layers",
+          "lines": [
+            "eval --repeats N 新建运行",
+            "独立上下文、保留每次尝试"
+          ]
+        },
+        {
+          "title": "人工确认候选",
+          "icon": "eye",
+          "lines": [
+            "单次问题 needs_review",
+            "确认严重度、修改范围与回归"
+          ]
+        }
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "id": "01",
+      "title": "接入层 · 项目、演示与可复用配置",
+      "color": "#2e73d7",
+      "badge": "CLI · 配置驱动",
+      "cards": [
+        {
+          "title": "统一命令入口",
+          "icon": "terminal",
+          "body": [
+            "review --repo … --url …",
+            "支持 --goal / --tasks / --ref。",
+            "plan-only 只产出任务配置。"
+          ],
+          "module": "cli.py"
+        },
+        {
+          "title": "只读仓库接入",
+          "icon": "folder",
+          "body": [
+            "本地目录只读；HTTPS / SSH 浅克隆。",
+            "不安装、不构建、不执行目标代码；",
+            "不初始化子模块。"
+          ],
+          "module": "repository.py"
+        },
+        {
+          "title": "真实页面探测",
+          "icon": "globe",
+          "body": [
+            "加载演示首页，读取可见文字、",
+            "控件与截图；保留 URL 路径。",
+            "文档功能与已上线能力分开看。"
+          ],
+          "module": "discovery.py"
+        },
+        {
+          "title": "类型化配置",
+          "icon": "sliders",
+          "body": [
+            "App / Task / Browser / Models",
+            "Pydantic 校验输入与预算。",
+            "project.yaml 可编辑、可复跑。"
+          ],
+          "module": "schema.py"
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "title": "规划与编排层 · 用户目标驱动的有界运行",
+      "color": "#e18b24",
+      "badge": "任务与路径分离",
+      "cards": [
+        {
+          "title": "任务规划器",
+          "icon": "sparkles",
+          "body": [
+            "有限 README / 产品文档",
+            "结合真实页面规划目标；",
+            "生成可观察的预期结果。"
+          ],
+          "module": "discovery.py",
+          "tone": "ai"
+        },
+        {
+          "title": "Explorer 自主决策",
+          "icon": "cursor",
+          "body": [
+            "只看目标、当前 UI 与截图。",
+            "每次输出一个结构化动作，",
+            "不接收源码或私有断言。"
+          ],
+          "module": "prompts/explorer.md",
+          "tone": "ai"
+        },
+        {
+          "title": "运行预算与停止",
+          "icon": "timer",
+          "body": [
+            "限制步骤、时间与模型调用数。",
+            "done / 超时 / 步数耗尽 /",
+            "连续操作错误分别记录。"
+          ],
+          "module": "agent.py"
+        },
+        {
+          "title": "尝试与恢复",
+          "icon": "repeat",
+          "body": [
+            "每次尝试使用独立目录。",
+            "浏览器阶段完成即保存现场，",
+            "Judge 故障可复用证据恢复。"
+          ],
+          "module": "agent.py · evidence.py"
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "title": "浏览器执行层 · 通用交互与可选产品适配",
+      "color": "#ec6b3b",
+      "badge": "Playwright · 隔离上下文",
+      "cards": [
+        {
+          "title": "通用页面观察",
+          "icon": "eye",
+          "body": [
+            "可见控件 / 状态 / 视口坐标",
+            "同源 iframe 文字与截图。",
+            "每轮生成 observed target ID。"
+          ],
+          "module": "browser.py"
+        },
+        {
+          "title": "有界 UI 动作",
+          "icon": "cursor",
+          "body": [
+            "点击、输入、选择、键盘、滚动；",
+            "等待、导航与刷新。",
+            "操作目标须来自当前观察。"
+          ],
+          "module": "browser.py · policy.py"
+        },
+        {
+          "title": "通用协议边界",
+          "icon": "globe",
+          "body": [
+            "页面加载与控制台错误留证；",
+            "任意站点 WS 仅记录帧元数据。",
+            "不猜测业务消息语义。"
+          ],
+          "module": "browser.py"
+        },
+        {
+          "title": "DuckKing 适配器",
+          "icon": "layers",
+          "body": [
+            "独立房间、模型首帧、动作结果。",
+            "合成 WAV 经真实 ASR / 灵矽；",
+            "结束后条件释放自有房间。"
+          ],
+          "module": "adapter = duckking",
+          "tone": "adapter"
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "title": "证据与媒体层 · 同一运行的可追溯现场",
+      "color": "#159cac",
+      "badge": "原始证据保留 · 时钟映射",
+      "cards": [
+        {
+          "title": "事件与页面快照",
+          "icon": "document",
+          "body": [
+            "单调时间戳、操作及错误。",
+            "observations / screenshots",
+            "events.jsonl 关联每一步。"
+          ],
+          "module": "evidence.py"
+        },
+        {
+          "title": "原始录屏",
+          "icon": "video",
+          "body": [
+            "浏览器 WebM 转 session.mp4。",
+            "完整保留运行现场；",
+            "2 fps、无声，限制明确。"
+          ],
+          "module": "media.py"
+        },
+        {
+          "title": "精简评审视频",
+          "icon": "scissors",
+          "body": [
+            "移除仅有模型决策的等待片段。",
+            "review.mp4 + 时间映射",
+            "可追溯到原始录屏时钟。"
+          ],
+          "module": "media.py"
+        },
+        {
+          "title": "备用视频分段",
+          "icon": "layers",
+          "body": [
+            "MiniMax 连续读取 4 秒片段；",
+            "末段补帧时长单独记录，",
+            "再汇总各段可见观察。"
+          ],
+          "module": "media.py · agent.py"
+        },
+        {
+          "title": "文件与调用清单",
+          "icon": "archive",
+          "body": [
+            "manifest：路径 / 大小 / SHA256",
+            "model-calls：模型 / 用量 /",
+            "耗时 / 错误与回退结果。"
+          ],
+          "module": "evidence.py · llm.py"
+        }
+      ]
+    },
+    {
+      "id": "05",
+      "title": "验证与评审层 · 确定性检查和 UX 判断分工",
+      "color": "#25996d",
+      "badge": "逻辑独立 · 证据同源",
+      "cards": [
+        {
+          "title": "同运行独立验收",
+          "icon": "check",
+          "body": [
+            "旁路检查页面、元素、文字与 URL。",
+            "通用页面健康和业务验收分开；",
+            "专用协议可检查动作 / 语音。"
+          ],
+          "module": "verifier.py"
+        },
+        {
+          "title": "不虚构业务成功",
+          "icon": "shield",
+          "body": [
+            "没有业务断言 → not_verified。",
+            "Explorer 说 done 不等于通过；",
+            "历史动作不能证明本轮成功。"
+          ],
+          "module": "schema.py · verifier.py"
+        },
+        {
+          "title": "独立 UX Judge",
+          "icon": "sparkles",
+          "body": [
+            "新上下文读取视频、轨迹与验收。",
+            "分离事实、推断、建议；",
+            "关注反馈、效率、恢复与可见性。"
+          ],
+          "module": "prompts/judge.md",
+          "tone": "ai"
+        },
+        {
+          "title": "候选质量门槛",
+          "icon": "check",
+          "body": [
+            "JSON Schema + 证据路径校验。",
+            "缺少具体证据的问题被拒绝。",
+            "严重度与单次候选仍需复核。"
+          ],
+          "module": "agent.py · schema.py"
+        }
+      ]
+    },
+    {
+      "id": "06",
+      "title": "AI 能力层 · 统一多模态调用与失败回退",
+      "color": "#8056da",
+      "badge": "各角色独立上下文",
+      "cards": [
+        {
+          "title": "智谱主模型",
+          "icon": "sparkles",
+          "body": [
+            "GLM-5.3 Flash · SSE 流式",
+            "thinking: disabled",
+            "直接读取完整评审 MP4。"
+          ],
+          "module": "defaults.py · llm.py",
+          "tone": "ai"
+        },
+        {
+          "title": "MiniMax 备用",
+          "icon": "cloud",
+          "body": [
+            "MiniMax-M3.1 Flash · 非流式",
+            "adaptive / reasoning_split",
+            "原生视频分段 + 最终综合。"
+          ],
+          "module": "defaults.py · llm.py",
+          "tone": "ai"
+        },
+        {
+          "title": "协议与输出约束",
+          "icon": "code",
+          "body": [
+            "严格验证最终 JSON；有限重试。",
+            "超时 / 过载 / 截断不当成功。",
+            "不保存模型内部推理正文。"
+          ],
+          "module": "llm.py · schema.py"
+        },
+        {
+          "title": "真实能力探针",
+          "icon": "video",
+          "body": [
+            "随机代码 + 颜色顺序短视频。",
+            "校验实际回答，记录供应商结果。",
+            "密钥由环境变量或外部文件读取。"
+          ],
+          "module": "probe.py · llm.py"
+        }
+      ]
+    },
+    {
+      "id": "07",
+      "title": "源码定位层 · 先完成体验评审，再关联实现",
+      "color": "#aa53b6",
+      "badge": "候选位置 ≠ 已证实根因",
+      "cards": [
+        {
+          "title": "有界只读检索",
+          "icon": "folder",
+          "body": [
+            "过滤敏感文件、生成物与符号链接。",
+            "按问题和可见控件查找相关片段，",
+            "限制文件数、文件大小与扫描量。"
+          ],
+          "module": "repository.py"
+        },
+        {
+          "title": "问题关联源码",
+          "icon": "code",
+          "body": [
+            "仅接收已有问题与候选片段。",
+            "给出位置、关联说明与修改建议；",
+            "不能增添或改写体验发现。"
+          ],
+          "module": "source_map.py",
+          "tone": "ai"
+        },
+        {
+          "title": "引用逐项核验",
+          "icon": "check",
+          "body": [
+            "路径在仓库内、行号在片段内，",
+            "quote 必须匹配对应行原文。",
+            "无法核验的引用单独拒绝。"
+          ],
+          "module": "source_map.py"
+        },
+        {
+          "title": "版本与重评边界",
+          "icon": "repeat",
+          "body": [
+            "记录源码 commit / dirty 状态。",
+            "与线上部署版本关系保持未知；",
+            "重评后不沿用旧问题源码映射。"
+          ],
+          "module": "repository.py · agent.py"
+        }
+      ]
+    },
+    {
+      "id": "08",
+      "title": "报告与复核层 · 让结果可查看、可修改、可回归",
+      "color": "#ce5848",
+      "badge": "报告型 MVP · 人工定级",
+      "cards": [
+        {
+          "title": "三种报告格式",
+          "icon": "document",
+          "body": [
+            "HTML / Markdown / JSON",
+            "展示任务状态、UX 判断、证据、",
+            "复现步骤与回归验收条件。"
+          ],
+          "module": "report.py"
+        },
+        {
+          "title": "候选去重",
+          "icon": "layers",
+          "body": [
+            "按任务 + 类别 + 规范化标题匹配。",
+            "记录出现次数与运行分母；",
+            "精确匹配，不宣称语义去重。"
+          ],
+          "module": "report.py"
+        },
+        {
+          "title": "失败可解释",
+          "icon": "eye",
+          "body": [
+            "产品失败、页面检查与模型故障分开。",
+            "同次运行保留结束原因及清理结果；",
+            "单次候选保持 needs_review。"
+          ],
+          "module": "agent.py · report.py"
+        },
+        {
+          "title": "产物可复用",
+          "icon": "archive",
+          "body": [
+            "原始视频与失败记录保留。",
+            "重跑 Judge、重复任务均可追溯；",
+            "人工确认修改范围与回归目标。"
+          ],
+          "module": "agent.py · evidence.py"
+        }
+      ]
+    },
+    {
+      "id": "09",
+      "title": "策略与工程质量层 · 跨层约束、测试与可交付性",
+      "color": "#b28a23",
+      "badge": "策略边界 + 自动化检查",
+      "cards": [
+        {
+          "title": "导航与资源策略",
+          "icon": "shield",
+          "body": [
+            "站点导航使用精确域名范围。",
+            "通用模式允许公共只读资源；",
+            "DuckKing 保持本轮房间所有权。"
+          ],
+          "module": "policy.py · browser.py"
+        },
+        {
+          "title": "数据与执行边界",
+          "icon": "lock",
+          "body": [
+            "页面与源码作为不可信数据。",
+            "敏感内容过滤、路径约束；",
+            "不接受模型任意 JS / shell。"
+          ],
+          "module": "policy.py · repository.py"
+        },
+        {
+          "title": "单元与集成测试",
+          "icon": "check",
+          "body": [
+            "模型协议替身 + 本地真实浏览器。",
+            "覆盖失败恢复、证据、媒体与 CLI；",
+            "离线测试不调用付费模型。"
+          ],
+          "module": "tests/"
+        },
+        {
+          "title": "CI 与覆盖率",
+          "icon": "chart",
+          "body": [
+            "GitHub Actions：lint → test → build。",
+            "综合覆盖率门槛 80%；",
+            "上传 HTML / JSON / XML 产物。"
+          ],
+          "module": ".github/workflows/ci.yml"
+        }
+      ]
+    }
+  ],
+  "footer": {
+    "title": "当前能力边界",
+    "items": [
+      "已实现：任务体验 → 独立验收 → 视频评审 → 源码候选 → 报告",
+      "按需适配：登录、复杂编辑器、专用语音与严格业务断言",
+      "仍需确认：Judge 误报、严重度、根因与源码 / 部署版本一致性",
+      "后续扩展：外部 Issue、代码修复、PR、部署与自动合并尚未实现"
+    ],
+    "note": "阅读方式：顶部是运行流程，下方是职责分层；AI 能力、证据和策略横向服务各阶段。总运行时间含模型等待，不等于产品延迟。"
+  }
+}

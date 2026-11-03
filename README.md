@@ -14,6 +14,10 @@ Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/), Chrome (default), a
 
 [中文说明](docs/README.zh-CN.md) · [Architecture](docs/architecture.md) · [Validation](docs/validation.md) · [Coverage](docs/coverage.md)
 
+[![UX Pilot layered system architecture](docs/diagrams/architecture.png)](docs/architecture.md)
+
+[Open full-size diagram](docs/diagrams/architecture.svg)
+
 ## Model configuration
 
 Primary: **Zhipu `glm-5.3-Flash`**, streaming with `thinking: disabled`. Fallback: **MiniMax `MiniMax-M3.1-Flash`**, non-streaming, adaptive thinking and split reasoning. Both accept native video input; keys stay outside the repository.
