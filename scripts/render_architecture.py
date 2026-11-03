@@ -237,8 +237,8 @@ def viewer():
     return """<!doctype html><html lang="zh-CN"><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>UX Pilot 分层架构图</title><style>
 body{margin:0;background:#e8edf5;font:15px/1.6 system-ui;color:#263449}header{position:sticky;top:0;z-index:2;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 22px;background:#fff;border-bottom:1px solid #d8e0ed}strong{margin-right:auto}button,a{font:inherit;border:1px solid #d8e0ed;border-radius:7px;padding:5px 12px;background:#fff;color:#315a8b;text-decoration:none;cursor:pointer}button[aria-pressed=true]{background:#eaf1fb;border-color:#548bd1}main{padding:24px;overflow:auto}img{display:block;width:min(100%,1600px);height:auto;margin:0 auto;box-shadow:0 8px 32px #20345414}.actual img{width:1600px;max-width:none}
-</style><header><strong>UX Pilot · 分层架构图</strong><button id="fit" aria-pressed="true">适应窗口</button><button id="actual" aria-pressed="false">原始尺寸</button><a href="architecture.svg" download>下载 SVG</a><a href="architecture.png" download>下载 PNG</a></header>
-<main id="view"><img src="architecture.svg" alt="UX Pilot 主流程、恢复复测与九层系统架构"></main><script>
+</style><header><strong>UX Pilot · 分层架构图</strong><button id="fit" aria-pressed="true">适应窗口</button><button id="actual" aria-pressed="false">原始尺寸</button><a href="architecture-detail.svg" download>下载 SVG</a><a href="architecture-detail.png" download>下载 PNG</a></header>
+<main id="view"><img src="architecture-detail.svg" alt="UX Pilot 主流程、恢复复测与九层系统架构"></main><script>
 for(const mode of ['fit','actual'])document.getElementById(mode).onclick=()=>{document.getElementById('view').classList.toggle('actual',mode==='actual');for(const id of ['fit','actual'])document.getElementById(id).setAttribute('aria-pressed',String(id===mode))};
 </script></html>"""
 
@@ -246,9 +246,9 @@ for(const mode of ['fit','actual'])document.getElementById(mode).onclick=()=>{do
 async def render(source_path: Path, svg_only=False):
     source = json.loads(source_path.read_text())
     directory = source_path.parent
-    svg = directory / "architecture.svg"
+    svg = directory / "architecture-detail.svg"
     svg.write_text(build_svg(source))
-    (directory / "architecture.html").write_text(viewer())
+    (directory / "architecture-detail.html").write_text(viewer())
     if svg_only:
         return
     async with async_playwright() as p:
@@ -266,13 +266,13 @@ async def render(source_path: Path, svg_only=False):
         )
         if outside:
             raise ValueError(f"Text outside diagram: {outside}")
-        await page.locator("svg").screenshot(path=str(directory / "architecture.png"))
+        await page.locator("svg").screenshot(path=str(directory / "architecture-detail.png"))
         await browser.close()
     print(
         json.dumps(
             {
                 "svg": str(svg.relative_to(ROOT)),
-                "png": str((directory / "architecture.png").relative_to(ROOT)),
+                "png": str((directory / "architecture-detail.png").relative_to(ROOT)),
                 "layers": len(source["layers"]),
             },
             ensure_ascii=False,
