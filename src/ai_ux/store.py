@@ -229,6 +229,13 @@ class Store:
                 result.append(value)
             return result
 
+    def first_activity_at(self):
+        """Oldest recorded submission or model call, independent of the query window."""
+        with self.connect() as db:
+            return db.execute(
+                "SELECT min(at) FROM (SELECT min(created_at) AS at FROM jobs UNION ALL SELECT min(at) AS at FROM calls)"
+            ).fetchone()[0]
+
     def analytics_rows(self, start_ts, end_ts):
         with self.connect() as db:
             jobs = [

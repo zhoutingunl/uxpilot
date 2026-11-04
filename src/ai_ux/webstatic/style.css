@@ -2,3 +2,4 @@
 /* Keep long model/error tables inside their cards on narrow screens. */
 .grid > *, .grid-2 > * { min-width: 0; }
 .panel, .card { overflow-x: auto; }
+.sortable-table th[data-sort]{cursor:pointer}.sortable-table .sort-button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;font-weight:650;text-align:left;white-space:nowrap}.sortable-table .sort-button:focus-visible{outline:2px solid #286fbd;outline-offset:4px}.sort-arrow{color:#718198;font-size:12px}.sortable-table th[aria-sort=ascending],.sortable-table th[aria-sort=descending]{color:#286b94}
