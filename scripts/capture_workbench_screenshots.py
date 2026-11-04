@@ -276,7 +276,9 @@ async def capture(output: Path, channel: str):
                 await page.goto(origin + "/stats")
                 await expect(page.get_by_role("heading", name="模型用量")).to_be_visible()
                 assert await page.evaluate("() => document.documentElement.scrollWidth <= innerWidth")
-                await page.locator("#models-table").scroll_into_view_if_needed()
+                await page.locator(
+                    '.duration-distribution[aria-label="总耗时分布"]'
+                ).scroll_into_view_if_needed()
                 await page.screenshot(path=str(output / "mobile-stats.png"))
                 assert not errors, errors
                 await browser.close()
