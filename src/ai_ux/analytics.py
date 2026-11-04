@@ -6,7 +6,7 @@ import hashlib
 import math
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from .policy import scrub
@@ -100,11 +100,24 @@ def distribution(values):
     }
 
 
-def statistics(jobs, calls, start, end, tz="Asia/Shanghai"):
+def statistics_period(days: int, now: datetime | None = None, tz="Asia/Shanghai"):
+    """Include today in the requested number of local calendar days."""
+    if days < 1:
+        raise ValueError("days must be positive")
+    end = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(tz))
+    start = datetime.combine(end.date() - timedelta(days=days - 1), time.min, end.tzinfo)
+    return start, end
+
+
+def statistics(jobs, calls, start, end, tz="Asia/Shanghai", first_activity=None):
     zone = ZoneInfo(tz)
+    if first_activity is None:
+        first_activity = min([j["created_at"] for j in jobs] + [c["at"] for c in calls], default=None)
+    first_date = datetime.fromtimestamp(first_activity, zone).date() if first_activity is not None else None
+    effective_start = max(start, first_date) if first_date is not None else None
     days = {
-        (start + timedelta(days=i)).isoformat(): {"submitted": 0, "finished": 0, "total_tokens": 0}
-        for i in range((end - start).days + 1)
+        (effective_start + timedelta(days=i)).isoformat(): {"submitted": 0, "finished": 0, "total_tokens": 0}
+        for i in range((end - effective_start).days + 1 if effective_start is not None else 0)
     }
     states = Counter()
     execution = []
@@ -152,11 +165,13 @@ def statistics(jobs, calls, start, end, tz="Asia/Shanghai"):
         days[day]["total_tokens"] += usage["total_tokens"] or 0
     return {
         "timezone": tz,
-        "start": start.isoformat(),
+        "start": effective_start.isoformat() if days else None,
+        "window_start": start.isoformat(),
+        "first_recorded_date": first_date.isoformat() if first_date else None,
         "end": end.isoformat(),
         "submitted": sum(d["submitted"] for d in days.values()),
         "states": dict(states),
-        "daily": [{"date": day, **value} for day, value in days.items()],
+        "daily": [{"date": day, **days[day]} for day in sorted(days, reverse=True)],
         "execution_seconds": distribution(execution),
         "queue_seconds": distribution(queue),
         "total_seconds": distribution(total),

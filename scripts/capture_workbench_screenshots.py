@@ -264,7 +264,7 @@ async def capture(output: Path, channel: str):
                 await page.screenshot(path=str(output / "errors.png"))
                 await page.goto(origin + "/stats")
                 await expect(page.get_by_role("heading", name="模型用量")).to_be_visible()
-                await page.screenshot(path=str(output / "stats.png"))
+                await page.screenshot(path=str(output / "stats.png"), full_page=True)
                 await page.goto(origin + "/deploys.html")
                 await expect(page.locator("#release-state")).to_have_text("版本一致")
                 await page.screenshot(path=str(output / "deploys.png"))
@@ -276,6 +276,7 @@ async def capture(output: Path, channel: str):
                 await page.goto(origin + "/stats")
                 await expect(page.get_by_role("heading", name="模型用量")).to_be_visible()
                 assert await page.evaluate("() => document.documentElement.scrollWidth <= innerWidth")
+                await page.locator("#models-table").scroll_into_view_if_needed()
                 await page.screenshot(path=str(output / "mobile-stats.png"))
                 assert not errors, errors
                 await browser.close()

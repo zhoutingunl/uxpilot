@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from .analytics import statistics
+from .analytics import statistics, statistics_period
 from .deployments import DeploymentRecord, process_identity, snapshot
 from .jobs import JobManager, JobRequest, validate_request
 from .replay import render_replay
@@ -186,10 +186,9 @@ def create_app(settings: Settings | None = None):
 
     @app.get("/api/stats")
     async def stats(days: int = Query(30, ge=1, le=365)):
-        end = datetime.now(timezone.utc)
-        start = end - timedelta(days=days)
+        start, end = statistics_period(days)
         jobs, calls = store.analytics_rows(start.timestamp(), end.timestamp())
-        return statistics(jobs, calls, start.date(), end.date())
+        return statistics(jobs, calls, start.date(), end.date(), first_activity=store.first_activity_at())
 
     @app.get("/api/errors")
     async def errors(days: int = Query(30, ge=1, le=365), state: str | None = None):
