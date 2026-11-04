@@ -340,6 +340,7 @@ async def evaluate(
     repeats: int | None = None,
     repository: Repository | None = None,
     report_base_url: str | None = None,
+    on_progress=None,
 ):
     tasks = [t for t in config.tasks if not task_ids or t.id in task_ids]
     if task_ids and set(task_ids) - {t.id for t in tasks}:
@@ -364,6 +365,10 @@ async def evaluate(
     if repository:
         (root / "repository.json").write_text(json.dumps(repository.metadata(), ensure_ascii=False, indent=2))
     (root / "config.json").write_text(json.dumps(config.model_dump(), ensure_ascii=False, indent=2))
+    total = sum(repeats or task.repeats for task in tasks)
+    render(root, report)
+    if on_progress:
+        on_progress({"batch_id": batch_id, "completed": 0, "total": total})
     try:
         for task in tasks:
             for attempt in range(1, (repeats or task.repeats) + 1):
@@ -371,6 +376,15 @@ async def evaluate(
                 report["runs"].append(run)
                 report["issues"] = aggregate(report["runs"])
                 render(root, report)
+                if on_progress:
+                    on_progress(
+                        {
+                            "batch_id": batch_id,
+                            "completed": len(report["runs"]),
+                            "total": total,
+                            "last_task": task.id,
+                        }
+                    )
                 if run["stop_reason"] == "interrupted":
                     return root, report
     finally:

@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/zhoutingunl/uxpilot",
+  "commit": "856cc287f99f9a7ee161cdcb0dbb3b47f3e00a19",
+  "restored_at": "2026-11-04T07:04:10.494066+00:00",
+  "note": "Upstream base for the jfcs62 compatibility layer; later modifications are recorded in Git and release manifests."
+}

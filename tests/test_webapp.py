@@ -1,3 +1,6 @@
+import asyncio
+import time
+
 from fastapi.testclient import TestClient
 
 from ai_ux.webapp import Settings, create_app
@@ -6,7 +9,13 @@ from ai_ux.webapp import Settings, create_app
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("UXPILOT_DATA_DIR", str(tmp_path / "db"))
     monkeypatch.setenv("UXPILOT_ALLOW_LOCAL", "0")
-    return TestClient(create_app(Settings()))
+    app = create_app(Settings())
+
+    async def waiting_runner(job, root):
+        await asyncio.sleep(3600)
+
+    app.state.manager.runner = waiting_runner
+    return TestClient(app)
 
 
 def test_workbench_pages_and_async_job_lifecycle(tmp_path, monkeypatch):
@@ -25,7 +34,19 @@ def test_workbench_pages_and_async_job_lifecycle(tmp_path, monkeypatch):
         assert created["status"] == "queued"
         job = c.get("/api/jobs/" + created["id"]).json()
         assert job["request"]["url"] == "https://github.com/"
-        assert c.post("/api/jobs/" + created["id"] + "/cancel").json()["status"] == "cancelled"
+        # Exercise cancellation after the worker has claimed the job, without network I/O.
+        for _ in range(100):
+            if c.get("/api/jobs/" + created["id"]).json()["status"] == "running":
+                break
+            time.sleep(0.01)
+        assert c.get("/api/jobs/" + created["id"]).json()["status"] == "running"
+        cancelled = c.post("/api/jobs/" + created["id"] + "/cancel").json()
+        assert cancelled["cancel_requested"] == 1
+        for _ in range(100):
+            if c.get("/api/jobs/" + created["id"]).json()["status"] == "cancelled":
+                break
+            time.sleep(0.01)
+        assert c.get("/api/jobs/" + created["id"]).json()["status"] == "cancelled"
         assert c.get("/api/jobs/" + created["id"] + "/events").status_code == 200
 
 

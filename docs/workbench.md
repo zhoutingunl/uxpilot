@@ -48,3 +48,11 @@ flowchart LR
 工作台不会通过启动进程自动生成成功部署。`POST /api/deploys` 需要版本、40 位 commit、目标、`health/pages/assets/version` 验收 checks；成功记录必须全部通过，coverage（如果提供）必须绑定同一 commit。`/deploys` 可显示 GitHub commit/compare 链接和最近 100 条记录。
 
 生产部署仍由外部 CI/发布系统完成；把工作台暴露到公网前必须配置反向代理认证、持久目录、备份和测试账号。`UXPILOT_ALLOW_LOCAL=1` 只用于受信任的本机测试；公网地址、Git 凭据和页面内容都按不可信输入处理。
+
+## jfcs62 兼容部署与历史迁移
+
+`ai_ux.jfcs62_web` 复用本工作台，提供已有 `/reports/...`、`/api/reviews` 和 `/deploys.html` 的兼容入口。持久历史迁移使用 `ai_ux.restore_history`：保留原始事件和报告备份，批量写入 SQLite，支持中断后继续且不重复计算调用或错误。缺少的旧结构化错误从保存的 `run.json` 派生，带 `derived_from`，不编造模型用量。
+
+发布脚本核验归档与依赖哈希、完整测试和实际录像后再切换版本。部署记录只描述相对上一成功版本的增量改动，并绑定对应快照的覆盖率。详情见 [部署说明](../deploy/README.md)；这些主机适配不会替换通用 `uxpilot-web` 入口。
+
+[Web 界面截图](screenshots/README.md)展示真实页面和合成示例数据，生成脚本不会调用模型或操作公开演示站。

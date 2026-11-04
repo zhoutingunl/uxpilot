@@ -57,7 +57,6 @@ def create_app(settings: Settings | None = None):
     app.state.store = store
     app.state.manager = manager
     static = Path(__file__).parent / "webstatic"
-    static.mkdir(exist_ok=True)
     app.mount("/static", StaticFiles(directory=static), name="static")
 
     @app.get("/", response_class=HTMLResponse)
@@ -123,7 +122,7 @@ def create_app(settings: Settings | None = None):
 
     @app.post("/api/jobs/{job_id}/cancel")
     async def cancel_job(job_id: str):
-        job = store.cancel(job_id)
+        job = manager.cancel(job_id)
         if not job:
             raise HTTPException(404, "任务不存在")
         return job
@@ -138,8 +137,16 @@ def create_app(settings: Settings | None = None):
         return (settings.data_dir / "jobs" / job_id).resolve()
 
     def safe_job_file(job_id: str, relative: str):
+        if not store.job(job_id) or Path(job_id).name != job_id:
+            raise HTTPException(404, "任务不存在")
         root = job_root(job_id)
-        target = (root / relative).resolve()
+        parts = Path(relative).parts
+        if Path(relative).is_absolute() or any(p.startswith(".") or p == "checkout" for p in parts):
+            raise HTTPException(404, "文件不存在")
+        raw = root / relative
+        target = raw.resolve()
+        if any(p.is_symlink() for p in [raw, *raw.parents] if p != root):
+            raise HTTPException(404, "文件不存在")
         if not target.is_relative_to(root) or not target.is_file():
             raise HTTPException(404, "文件不存在")
         return target
@@ -188,7 +195,20 @@ def create_app(settings: Settings | None = None):
     async def errors(days: int = Query(30, ge=1, le=365), state: str | None = None):
         end = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
-        return {"clusters": store.clusters(start.timestamp(), end.timestamp(), state)}
+        clusters = store.clusters(start.timestamp(), end.timestamp(), state)
+        for cluster in clusters:
+            for sample in cluster["samples"]:
+                sample["job_url"] = f"/jobs#{sample['job_id']}"
+                relative = Path(sample.get("stream") or "") / "replay.html"
+                try:
+                    target = safe_job_file(sample["job_id"], relative.as_posix())
+                    if target.is_file():
+                        sample["replay_url"] = (
+                            f"/api/jobs/{sample['job_id']}/reports/{relative.as_posix()}#event-{sample['seq']}"
+                        )
+                except HTTPException:
+                    pass
+        return {"clusters": clusters}
 
     @app.post("/api/errors/triage")
     async def triage(request: Request):
