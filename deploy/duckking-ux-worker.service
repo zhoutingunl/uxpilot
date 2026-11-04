@@ -1,0 +1,32 @@
+[Unit]
+Description=DuckKing UX review queue worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/zt_dir/ai_base/DuckKing_ux_review/current
+ExecStart=/root/zt_dir/ai_base/DuckKing_ux_review/current/.venv/bin/python -m ai_ux.review_worker --base /root/zt_dir/ai_base/DuckKing_ux_review
+Environment=HOME=/root
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=PLAYWRIGHT_BROWSERS_PATH=/root/zt_dir/ai_base/DuckKing_ux_review/browser-cache
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=60
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/root/zt_dir/ai_base/DuckKing_ux_review/state/jobs /root/zt_dir/ai_base/DuckKing_ux_review/artifacts /root/zt_dir/ai_base/DuckKing_ux_review/logs /root/zt_dir/ai_base/DuckKing_ux_review/browser-cache /root/zt_dir/ai_base/DuckKing_ux_review/eval.lock
+CPUQuota=400%
+MemoryMax=8G
+TasksMax=512
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

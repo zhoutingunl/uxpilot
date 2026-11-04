@@ -1,0 +1,34 @@
+[Unit]
+Description=UX Pilot full workbench (recovered 856cc28 baseline)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/zt_dir/ai_base/DuckKing_ux_review/current
+ExecStart=/root/zt_dir/ai_base/DuckKing_ux_review/current/.venv/bin/python -m ai_ux.jfcs62_web
+Environment=HOME=/root
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=UXPILOT_DATA_DIR=/root/zt_dir/ai_base/DuckKing_ux_review/workbench
+Environment=UXPILOT_WORKERS=1
+Environment=PLAYWRIGHT_BROWSERS_PATH=/root/zt_dir/ai_base/DuckKing_ux_review/browser-cache
+Restart=on-failure
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=90
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/root/zt_dir/ai_base/DuckKing_ux_review/workbench /root/zt_dir/ai_base/DuckKing_ux_review/state/jobs /root/zt_dir/ai_base/DuckKing_ux_review/browser-cache
+CPUQuota=400%
+MemoryMax=8G
+TasksMax=512
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

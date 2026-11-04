@@ -35,6 +35,18 @@ Pages:
 
 Set `UXPILOT_DATA_DIR` for durable state, `UXPILOT_WORKERS` (default 1), `UXPILOT_MAX_QUEUED`, `UXPILOT_LOCAL_ROOTS` for allowed local repositories, and `UXPILOT_ALLOW_LOCAL=1` only for trusted local test environments. Public web mode validates public demo/repository hosts and allows only public GET/HEAD subresources; it is not a full network sandbox. Use a reverse proxy, authentication and a dedicated test account before exposing the workbench beyond localhost.
 
+## Web interface
+
+[View all screenshots](docs/screenshots/README.md) · [jfcs62 deployment and migration](deploy/README.md)
+
+![UX Pilot workbench](docs/screenshots/home.png)
+
+| Analysis replay | Tool-error clusters |
+| --- | --- |
+| [![Analysis replay](docs/screenshots/replay.png)](docs/screenshots/README.md#分析回放) | [![Tool-error clusters](docs/screenshots/errors.png)](docs/screenshots/README.md#错误聚类与统计) |
+
+Screenshots show real application pages with isolated synthetic documentation data, not production evaluations or model benchmarks. The gallery also covers job details, statistics, deployment history and mobile layouts.
+
 ## Model configuration
 
 Primary: **Zhipu `glm-5.3-Flash`**, streaming with `thinking: disabled`. Fallback: **MiniMax `MiniMax-M3.1-Flash`**, non-streaming, adaptive thinking and split reasoning. Both accept native video input; keys stay outside the repository.

@@ -6,7 +6,7 @@ import json
 import sqlite3
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 from .analytics import event_error, usage_numbers
@@ -154,10 +154,10 @@ class Store:
             )
         return count
 
-    def append_event(self, job_id, stream, seq, event, at=None):
+    def append_event(self, job_id, stream, seq, event, at=None, *, connection=None):
         event = scrub(event)
         at = time.time() if at is None else at
-        with self.connect() as db:
+        with self.connect() if connection is None else nullcontext(connection) as db:
             cur = db.execute(
                 "INSERT OR IGNORE INTO events(job_id,stream,seq,at,kind,payload) VALUES(?,?,?,?,?,?)",
                 (

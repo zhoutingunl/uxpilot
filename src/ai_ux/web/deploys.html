@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f6f7f2"><title>DuckKing UX Agent · 部署记录</title><link rel="stylesheet" href="./deploys.css"></head>
+<body>
+<header class="topbar"><a class="brand" href="./"><span class="brand-mark">ux<span>●</span></span>DuckKing UX Agent</a><nav aria-label="页面导航"><a href="./">新建评测</a><a href="./stats">统计</a><a href="./errors">工具错误</a><a href="./jobs">任务与回放</a><a href="./deploys.html" aria-current="page">部署记录</a><a href="#evaluations">评测报告</a><a href="https://duck.qbox.net/" target="_blank" rel="noopener">DuckKing ↗</a></nav></header>
+<main>
+<section class="intro"><div><p class="eyebrow">RELEASE JOURNAL</p><h1>每次上线，都有记录。</h1><p class="subtitle">核对评测工具的运行版本，回看发布验证与真实评测结果。</p></div><button id="refresh-deploys">刷新记录</button></section>
+<p id="deploy-error" class="notice" role="alert" hidden></p>
+<section class="card" aria-labelledby="current-heading"><div class="section-heading"><h2 id="current-heading">正在运行</h2><span id="release-state" class="tag" role="status">正在读取</span></div><p id="release-version" class="release-version">—</p><dl class="release-facts"><div><dt>代码版本</dt><dd id="release-commit">—</dd></div><div><dt>部署目标</dt><dd id="release-target">—</dd></div><div><dt>构建时间</dt><dd id="release-built">—</dd></div></dl><p id="release-note" class="note">正在读取服务的发布信息…</p></section>
+<section class="card" aria-labelledby="history-heading"><div class="section-heading"><h2 id="history-heading">发布流水</h2><span id="deploy-updated" class="note">每 10 秒更新</span></div><div class="table-scroll" tabindex="0" role="region" aria-label="发布流水，可横向滚动"><table><thead><tr><th>版本 / 代码</th><th>发布时间</th><th>发布人 / 目标</th><th>结果 / 自检</th><th>行覆盖率</th><th>分支覆盖率</th><th>变更内容</th></tr></thead><tbody id="deploy-rows"></tbody></table></div><p id="deploy-empty" class="note" hidden>尚无部署记录。准备完成不代表上线验收通过。</p><p class="note">最近 100 次发布。安装、测试、页面与 API 验证通过后记录部署成功；产品任务和模型评审结果在下方单独展示。</p><p class="note">代码快照以 SHA-256 标识。覆盖率只展示与该快照绑定的 Python 测试数据；没有对应报告时显示“未记录”。</p></section>
+<section id="evaluations" class="card" aria-labelledby="evaluation-heading"><div class="section-heading"><h2 id="evaluation-heading">评测运行</h2><span id="evaluation-state" class="tag">正在读取</span></div><p id="evaluation-note" class="note"></p><div id="batch-list"></div><p id="batch-empty" class="note" hidden>尚无评测记录。任务开始后，进度与报告会自动显示。</p><p class="note">任务结果来自独立验收，视频评审由模型完成。模型调用和产品任务可能分别失败，报告保留原始证据与限制。</p></section>
+<footer>DuckKing UX Agent <span>·</span> 真实浏览器 · 独立验收 · 视频评审</footer>
+</main><script src="./deploys.js" defer></script>
+</body></html>

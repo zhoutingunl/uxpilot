@@ -164,7 +164,7 @@ def statistics(jobs, calls, start, end, tz="Asia/Shanghai"):
         "known_total_tokens": sum(r["total_tokens"] for r in models.values()),
         "unknown_usage_calls": sum(r["unknown_usage_calls"] for r in models.values()),
         "notes": [
-            "每日提交数指评测请求数，非 Git commit 数。",
+            "每日计数为评测任务数（含迁入的历史命令行批次），非 Git commit 数。",
             "提交与耗时按提交日期筛选；Token 按调用发生日期统计。",
             "失败调用缺失用量不补为零；已知用量不是账单。",
             "执行耗时含模型等待，排队时间单列；已结束样本才计入耗时分布。",

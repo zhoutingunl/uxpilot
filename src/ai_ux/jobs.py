@@ -23,6 +23,7 @@ from .store import Store
 class JobRequest(StrictModel):
     repo: str = Field(min_length=1, max_length=1000)
     url: str = Field(min_length=1, max_length=2000)
+    ref: str = Field(default="", max_length=150, pattern=r"^([A-Za-z0-9_./][A-Za-z0-9_./-]*)?$")
     goal: str = Field(default="", max_length=1500)
     tasks: int = Field(default=2, ge=1, le=5)
     repeats: int = Field(default=1, ge=1, le=3)
@@ -161,6 +162,8 @@ class JobManager:
             request.repo,
             request.url,
             output=root,
+            ref=request.ref or None,
+            adapter="duckking" if urlsplit(request.url).hostname == "duck.qbox.net" else "generic",
             goals=[request.goal] if request.goal else [],
             task_count=request.tasks,
             task_steps=request.max_steps,
@@ -177,6 +180,11 @@ class JobManager:
             repository=repo,
             report_base_url=f"/api/jobs/{job['id']}/analysis",
         )
+        if (project / "discovery/replay.html").is_file():
+            from .report import render
+
+            report["planning_replay"] = "../../discovery/replay.html"
+            render(batch, report)
         path = str((batch / "report.html").relative_to(root))
         failed = any(
             r.get("judge_status") != "completed"

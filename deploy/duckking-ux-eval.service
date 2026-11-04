@@ -1,0 +1,25 @@
+[Unit]
+Description=DuckKing UX evaluation (one batch)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+WorkingDirectory=/root/zt_dir/ai_base/DuckKing_ux_review/current
+ExecStart=/bin/bash /root/zt_dir/ai_base/DuckKing_ux_review/run-eval.sh
+Environment=HOME=/root
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=PLAYWRIGHT_BROWSERS_PATH=/root/zt_dir/ai_base/DuckKing_ux_review/browser-cache
+ExecStopPost=/root/zt_dir/ai_base/DuckKing_ux_review/current/.venv/bin/python /root/zt_dir/ai_base/DuckKing_ux_review/current/deploy/finish-eval.py
+UMask=0077
+TimeoutStartSec=90min
+TimeoutStopSec=60
+KillSignal=SIGINT
+CPUQuota=400%
+MemoryMax=8G
+TasksMax=512
+StandardOutput=journal
+StandardError=journal

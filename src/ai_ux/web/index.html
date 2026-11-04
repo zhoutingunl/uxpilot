@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f6f7f2"><title>DuckKing UX Agent · 体验评测</title><link rel="stylesheet" href="./deploys.css"><link rel="stylesheet" href="./workbench.css"></head>
+<body>
+<header class="topbar"><a class="brand" href="./"><span class="brand-mark">ux<span>●</span></span>DuckKing UX Agent</a><nav aria-label="页面导航"><a href="#new-review" aria-current="page">新建评测</a><a href="#reviews">评测记录</a><a href="./deploys.html">部署记录</a></nav></header>
+<main>
+<section class="intro"><div><p class="eyebrow">UX REVIEW WORKBENCH</p><h1>输入项目，开始一次真实体验。</h1><p class="subtitle">从仓库了解产品，在真实网站上操作，用录屏和证据回看体验。</p></div><span class="tag">自动规划 · 浏览器操作 · 视频评审</span></section>
+<div class="workspace">
+<section id="new-review" class="card form-card" aria-labelledby="form-heading"><div class="section-heading"><h2 id="form-heading">新建评测</h2><button type="button" id="use-example" class="text-button">填入 DuckKing 示例</button></div>
+<form id="review-form">
+<label for="repo">仓库地址 <span>必填</span></label><input id="repo" name="repo" type="url" required maxlength="500" pattern="https://.+" placeholder="https://github.com/owner/project.git" autocomplete="off" spellcheck="false" aria-describedby="repo-help"><p id="repo-help" class="field-help">填写 HTTPS Git 地址；支持公开仓库或服务器已有读取权限的仓库。</p>
+<label for="url">网站地址 <span>必填</span></label><input id="url" name="url" type="url" required maxlength="2000" pattern="https?://.+" placeholder="https://demo.example.com/" autocomplete="off" spellcheck="false" aria-describedby="url-help"><p id="url-help" class="field-help">填写可访问的完整页面地址，可以保留页面路径。</p>
+<label for="goals">希望重点体验什么？ <span>选填</span></label><textarea id="goals" name="goals" maxlength="1500" rows="3" placeholder="例如：第一次进入网站，完成一次搜索，找到并查看结果。留空则自动规划体验目标。"></textarea>
+<details class="options"><summary>评测选项</summary><div class="option-grid"><div><label for="tasks">任务数量</label><select id="tasks" name="tasks"><option value="1">1 项 · 快速体验</option><option value="3" selected>3 项 · 常规体验</option><option value="5">5 项 · 更多场景</option></select></div><div><label for="ref">分支或标签 <span>选填</span></label><input id="ref" name="ref" maxlength="150" placeholder="留空使用默认分支" autocomplete="off" spellcheck="false"></div></div></details>
+<div class="submit-row"><button id="submit-review" type="submit" class="primary">开始评测 <span aria-hidden="true">↗</span></button><p class="field-help">提交后可关闭页面，任务会在服务器继续运行。</p></div>
+<p id="submit-status" role="status" aria-live="polite" hidden></p><p id="form-error" class="notice" role="alert" hidden></p>
+</form></section>
+<aside class="card workflow" aria-labelledby="workflow-heading"><p class="eyebrow">FROM PROJECT TO EVIDENCE</p><h2 id="workflow-heading">你会得到什么</h2><ol><li><span class="step-number">01</span><div><h3>针对产品的体验目标</h3><p>结合仓库说明和网站首页，规划可实际完成的用户任务。</p></div></li><li><span class="step-number">02</span><div><h3>真实操作与完整证据</h3><p>记录页面、交互和录屏，保留成功结果与遇到的阻碍。</p></div></li><li><span class="step-number">03</span><div><h3>可回看的体验报告</h3><p>汇总体验问题、证据、修改建议和源码位置，供你复核。</p></div></li></ol><p class="note">评测逐项执行。网站无法访问、登录受限或模型调用失败时，会保留状态和已获得的证据。</p></aside>
+</div>
+<section id="reviews" class="card" aria-labelledby="reviews-heading"><div class="section-heading"><div><h2 id="reviews-heading">评测记录</h2><p class="note">提交的任务、当前进度和报告都在这里。</p></div><button id="refresh-reviews" type="button">刷新记录</button></div><p id="list-error" class="notice" role="alert" hidden></p><div id="review-list" aria-live="polite"></div><p id="reviews-empty" class="empty" hidden>还没有提交新的项目。填写上方地址，开始第一轮体验。</p><p id="reviews-updated" class="note">正在读取评测记录…</p></section>
+<section id="existing-batches" class="card" hidden><div class="section-heading"><h2>已有评测报告</h2><a class="note" href="./deploys.html#evaluations">查看部署与运行信息 ↗</a></div><div id="existing-list"></div></section>
+<footer>DuckKing UX Agent <span>·</span> 真实浏览器 · 独立验收 · 视频评审</footer>
+</main><script src="./workbench.js" defer></script>
+</body></html>
