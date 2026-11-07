@@ -109,7 +109,31 @@ The original project-specific profile remains available:
 uv run uxpilot --config configs/duckking.yaml eval --task first-nod --task local-voice
 ```
 
-It adds independent room ownership, real ASR/cloud voice through synthetic WAV input, model-first-frame checks and actual action results. It targets a public demo and can consume Lingxi voice quota. Generic review does not call DuckKing endpoints or assume its selectors. The voice fixtures contain system-generated Mandarin, not human recordings.
+It adds independent room ownership, real ASR/cloud voice through synthetic WAV input, model-first-frame checks and actual action results. It targets a public demo and can consume Lingxi voice quota. Generic review does not call DuckKing endpoints or assume its selectors. The voice fixtures contain system-generated speech, not human recordings.
+
+The profile also includes English/French interface switching and cloud voice tasks:
+
+```bash
+uv run uxpilot --config configs/duckking.yaml eval \
+  --task language-en --task language-fr \
+  --task cloud-voice-en --task cloud-voice-fr
+```
+
+Chinese supports local-first recognition and cloud fallback; English and French use Lingxi cloud. Synthetic Mandarin, English and French WAV fixtures enter the browser's microphone capture path. The evaluator checks the current turn's transcript, actual motion results, assistant text, non-silent response PCM, turn completion and browser-reported playback counters. `page_language` checks the document language; localized text assertions check visible controls. `voice_session_language` checks the requested session language, not the spoken response language.
+
+The configured GLM/MiniMax chat integrations send text, images and video. Separate MiniMax services now generate microphone input with `speech-2.8-hd` and independently transcribe the actual returned audio with `asr-1.0`. The DuckKing cloud tasks enable both through `speech` configuration and `audio.source: minimax_tts`; file fixtures remain supported. Each voice task makes at most one TTS and one ASR request in addition to browser/LLM/Lingxi calls. Credentials stay outside the repository and actual speech calls are included in model-call evidence.
+
+`audio_received` establishes receipt of valid non-silent PCM; `audio_played` additionally requires a running browser audio context, completed playback frames, an empty queue and no new dropped frames. `response_speech` checks configured keywords in the independent ASR transcript. It snapshots only the latest spoken turn and rejects mixed-rate or incomplete PCM. Reports include the transcript, WAV playback and `speech-review.json`. These checks do not establish complete semantic equivalence, physical speaker audibility, pronunciation quality or real-user speech accuracy.
+
+Run the deterministic interface matrix without model calls:
+
+```bash
+uv run uxpilot --config configs/duckking.yaml check-locales
+# Narrow the scope while debugging:
+uv run uxpilot --config configs/duckking.yaml check-locales --page index.html --viewport mobile
+```
+
+The default matrix covers ten pages, three languages, desktop and mobile (140 navigation/switch/reload cases). It operates the real language menu and checks key UI text, selected language, room/document/canvas preservation, non-Chinese cloud-mode restrictions, reload/cross-page persistence and horizontal overflow. It waits for asynchronous voice-mode initialization. Results, screenshots, events and recordings are retained under `locales-<batch>/`; `locale-report.html` lists each check. This adapter-specific matrix does not establish that every translation or every speech workflow is correct.
 
 ## Tests
 

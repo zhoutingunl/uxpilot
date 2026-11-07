@@ -12,7 +12,8 @@ from playwright.async_api import async_playwright
 from .evidence import Evidence
 from .media import encode_video, review_video
 from .policy import Policy, safe_url, scrub
-from .schema import Action, App, Browser, Task
+from .schema import Action, App, Assertion, Browser, Task
+from .verifier import check_events
 
 OBSERVE = r"""() => {
  const rect=e=>{const b=e.getBoundingClientRect();return {x:Math.round(b.x),y:Math.round(b.y),w:Math.round(b.width),h:Math.round(b.height)}};
@@ -28,7 +29,7 @@ OBSERVE = r"""() => {
    options:e.tagName==='SELECT'?[...e.options].map(o=>({value:o.value,label:o.text,disabled:o.disabled})):undefined});
  }
  const copy=document.body.cloneNode(true);const originals=[...document.body.querySelectorAll('*')],clones=[...copy.querySelectorAll('*')];for(let i=0;i<originals.length;i++){if(!shown(originals[i]))clones[i].remove();}for(const e of copy.querySelectorAll('script,style,input,textarea,#activation'))e.remove();
- return {url:location.href,title:document.title,text:(copy.textContent||'').replace(/\s+/g,' ').slice(0,16000),
+ return {url:location.href,title:document.title,language:document.documentElement.lang,text:(copy.textContent||'').replace(/\s+/g,' ').slice(0,16000),
    nodes,viewport:{width:innerWidth,height:innerHeight,scroll_y:scrollY,scroll_width:document.documentElement.scrollWidth},
    statuses:[...document.querySelectorAll('[role=status],[role=alert]')].filter(shown).map(e=>e.textContent.trim()).slice(0,20)};
 }"""
@@ -51,6 +52,10 @@ class BrowserRuntime:
         self.response_audio_frames = 0
         self.response_audio_bytes = 0
         self.response_audio_rate = None
+        self.response_audio_rates = set()
+        self.response_turn_start = None
+        self.response_turn_rates = set()
+        self.audio_signal_seen = False
         self.last_mark = None
         self.cleanup = {"status": "not_applicable" if app.adapter == "generic" else "not_started"}
 
@@ -151,7 +156,8 @@ class BrowserRuntime:
         await self.page.goto(url, wait_until="domcontentloaded", timeout=30000)
         if self.app.adapter == "duckking":
             await self.page.wait_for_function(
-                "() => /房间 [0-9]+ ·/.test(document.querySelector('#room-label')?.textContent||'')",
+                """() => {const room=new URL(location.href).searchParams.get('room');
+                return /^[0-9]+$/.test(room||'')&&!!document.querySelector('.room-links a[data-room="'+room+'"][aria-current=page]');}""",
                 timeout=20000,
             )
             self.owned_room = parse_qs(urlsplit(self.page.url).query).get("room", [None])[0]
@@ -221,20 +227,26 @@ class BrowserRuntime:
         if kind == "audio":
             import base64
 
+            if direction != "received":
+                return
             try:
                 decoded = base64.b64decode(data.get("pcm", ""), validate=True)
-            except ValueError:
+            except (ValueError, TypeError):
+                return
+            rate = data.get("sample_rate")
+            if not decoded or len(decoded) % 2 or type(rate) is not int or not 8000 <= rate <= 192000:
                 return
             self.response_audio_frames += 1
             self.response_audio_bytes += len(decoded)
-            rate = data.get("sample_rate")
-            if isinstance(rate, int) and 8000 <= rate <= 192000:
-                self.response_audio_rate = rate
+            self.response_audio_rate = rate
+            self.response_audio_rates.add(rate)
+            self.response_turn_rates.add(rate)
             if self.response_audio_bytes <= 8_000_000:
                 # Public/synthetic task responses only. Raw audio is never sent as a prompt by default.
                 with (self.evidence.root / "response.pcm").open("ab") as f:
                     f.write(decoded)
-            if self.response_audio_frames == 1:
+            if not self.audio_signal_seen and any(decoded):
+                self.audio_signal_seen = True
                 self.evidence.event("first_audio", sample_rate=rate)
             return
         if kind == "state":
@@ -254,6 +266,7 @@ class BrowserRuntime:
             "transcript",
             "playback_end",
             "voice_milestone",
+            "playback_status",
             "error",
             "scene_error",
             "connect",
@@ -281,6 +294,16 @@ class BrowserRuntime:
                     "feedback",
                     "aborted",
                     "stage",
+                    "language",
+                    "phase",
+                    "result",
+                    "output_state",
+                    "received_frames",
+                    "scheduled_frames",
+                    "ended_frames",
+                    "dropped_frames",
+                    "queued_ms",
+                    "signal_peak_milli",
                 )
                 if k in data
             }
@@ -336,6 +359,10 @@ class BrowserRuntime:
                 raise ValueError("target is not present in the latest observation")
             if node:
                 self.policy.check_control(node)
+                if node.get("disabled") and action.kind in {"click", "fill", "select", "speak"}:
+                    raise ValueError(
+                        "observed control is disabled; wait or use an enabled control to change state"
+                    )
             locator = self.page.locator(f'[data-ux-id="{action.target}"]') if node else None
             if action.kind == "click":
                 # Follow an observed same-origin link in the owned tab; no orphan tabs/worlds.
@@ -379,6 +406,9 @@ class BrowserRuntime:
                 )
                 await self.page.wait_for_timeout(delay)
                 box = await locator.bounding_box()
+                self.audio_signal_seen = False
+                self.response_turn_start = self.response_audio_bytes
+                self.response_turn_rates.clear()
                 await self.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
                 self.evidence.event(
                     "audio_input_start", transcript=audio.transcript, input_kind=audio.input_kind
@@ -421,6 +451,10 @@ class BrowserRuntime:
             return await self.page.locator(assertion.selector).is_visible()
         if assertion.kind == "url_contains":
             return assertion.contains in self.page.url
+        if assertion.kind == "page_language":
+            language = (await self.page.locator("html").get_attribute("lang") or "").lower()
+            expected = assertion.contains.lower()
+            return language == expected or language.startswith(expected + "-")
         if assertion.kind == "text":
             locator = self.page.locator(assertion.selector)
             return await locator.is_visible() and assertion.contains in (await locator.inner_text())
@@ -437,8 +471,43 @@ class BrowserRuntime:
             )
         return None
 
+    def export_response_audio(self):
+        """Snapshot only the last spoken turn, excluding prior replies/greetings."""
+        import wave
+
+        pcm = self.evidence.root / "response.pcm"
+        if (
+            self.response_turn_start is None
+            or len(self.response_turn_rates) != 1
+            or not pcm.is_file()
+            or pcm.stat().st_size != self.response_audio_bytes
+            or self.response_audio_bytes <= self.response_turn_start
+        ):
+            return None
+        with pcm.open("rb") as source:
+            source.seek(self.response_turn_start)
+            raw = source.read()
+        output = self.evidence.root / "response.wav"
+        with wave.open(str(output), "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(next(iter(self.response_turn_rates)))
+            wav.writeframes(raw)
+        return output
+
     async def finish(self):
         raw_video = None
+        cleanup_cookies = httpx.Cookies()
+        if self.owned_room and self.context:
+            # Retain this isolated visitor's authorization only in memory while
+            # closing the browser releases its voice/viewer connections.
+            try:
+                for cookie in await self.context.cookies([self.app.base_url]):
+                    cleanup_cookies.set(
+                        cookie["name"], cookie["value"], domain=cookie["domain"], path=cookie["path"]
+                    )
+            except Exception:
+                self.evidence.event("cleanup_auth_unavailable")
         if self.page and not self.page.is_closed():
             try:
                 resources = await self.page.evaluate("""()=>performance.getEntriesByType('resource').map(e=>({url:e.name,
@@ -466,7 +535,12 @@ class BrowserRuntime:
         if self.owned_room:
             self.cleanup = {"status": "failed"}
             try:
-                async with httpx.AsyncClient(timeout=12) as client:
+                origin = urlsplit(self.app.base_url)
+                async with httpx.AsyncClient(
+                    timeout=12,
+                    cookies=cleanup_cookies,
+                    headers={"Origin": f"{origin.scheme}://{origin.netloc}"},
+                ) as client:
                     for attempt in range(3):
                         url = (
                             self.app.base_url.rstrip("/")
@@ -522,6 +596,15 @@ class BrowserRuntime:
                 "frames": self.response_audio_frames,
                 "bytes": self.response_audio_bytes,
                 "sample_rate": self.response_audio_rate,
+                "sample_rates": sorted(self.response_audio_rates),
+                "browser_playback_completed": check_events(
+                    Assertion(id="audio-played", kind="audio_played"), self.evidence.events
+                ),
+                "speech_content_independently_verified": bool(
+                    checks := [a for a in self.task.assertions if a.kind == "response_speech"]
+                )
+                and all(check_events(a, self.evidence.events) for a in checks),
+                "speech_content_verification_scope": "configured_keywords_only",
                 "playback_verified_by_human": False,
             },
         )

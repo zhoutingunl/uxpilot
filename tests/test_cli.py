@@ -100,3 +100,21 @@ def test_missing_config_and_interrupt(tmp_path, monkeypatch, capsys):
     assert cli.main() == 2 and "FileNotFoundError" in capsys.readouterr().err
     monkeypatch.setattr(cli, "load_config", lambda *args: (_ for _ in ()).throw(KeyboardInterrupt()))
     assert cli.main() == 130
+
+
+@pytest.mark.parametrize("status,expected", [("passed", 0), ("failed", 2)])
+def test_locale_command_passes_scope_and_reports_product_failures(tmp_path, monkeypatch, status, expected):
+    path, _ = cli_config(tmp_path, monkeypatch)
+    seen = []
+
+    async def check(config, **kwargs):
+        seen.append(kwargs)
+        return tmp_path, {"status": status}
+
+    monkeypatch.setattr(cli, "check_locales", check)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["uxpilot", "--config", str(path), "check-locales", "--page", "index.html", "--viewport", "mobile"],
+    )
+    assert cli.main() == expected
+    assert seen[0]["pages"] == ["index.html"] and seen[0]["viewports"] == ["mobile"]

@@ -17,6 +17,8 @@ from pydantic import ValidationError
 from .review_jobs import JobStore, QueueFull, ReviewRequest
 
 PUBLIC_FIELDS = {
+    "repository_commit",
+    "workspace_dirty",
     "version",
     "snapshot_sha256",
     "commit",

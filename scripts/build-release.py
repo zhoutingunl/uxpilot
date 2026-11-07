@@ -64,6 +64,14 @@ digest = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest
 metadata = {
     "version": version,
     "source_kind": "local_workspace_snapshot",
+    "repository_commit": subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+    ).strip(),
+    "workspace_dirty": bool(
+        subprocess.check_output(
+            ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"], text=True
+        ).strip()
+    ),
     "snapshot_sha256": digest,
     "reference_commit": sha,
     "built_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),

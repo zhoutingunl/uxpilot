@@ -78,6 +78,15 @@ def render(root: Path, report: dict):
             lines += [""]
         if r.get("error"):
             lines += [f"运行错误：{r['error']}", ""]
+        if speech := r.get("speech_review"):
+            lines += [
+                f"独立语音复核：{speech.get('status')} · {speech.get('model', '')}。",
+                "",
+                html.escape(speech.get("transcript", "")),
+                "",
+                f"[语音复核证据]({r['run_id']}/speech-review.json)",
+                "",
+            ]
         lines += [
             f"[分析回放]({r['run_id']}/replay.html) · [逐步事件]({r['run_id']}/events.jsonl) · [独立验收]({r['run_id']}/verification.json) · [模型调用]({r['run_id']}/model-calls.json)",
             "",
@@ -156,6 +165,14 @@ def render(root: Path, report: dict):
                 body.append(
                     f'<p>评审精简版；<a href="{rid}/session.mp4">原始完整视频</a> · <a href="{rid}/video-timeline.json">时间映射</a></p>'
                 )
+        if speech := r.get("speech_review"):
+            body.append(
+                f"<h3>独立语音复核：{html.escape(speech.get('status', 'unknown'))}</h3>"
+                f"<blockquote>{html.escape(speech.get('transcript', ''))}</blockquote>"
+                f'<p><a href="{rid}/speech-review.json">ASR 证据</a></p>'
+            )
+            if speech.get("status") == "completed":
+                body.append(f'<audio controls preload="metadata" src="{rid}/response.wav"></audio>')
         body.append(
             f'<p><a href="{rid}/replay.html">分析回放</a> · <a href="{rid}/run.json">运行证据</a> · <a href="{rid}/verification.json">验收</a></p></section>'
         )

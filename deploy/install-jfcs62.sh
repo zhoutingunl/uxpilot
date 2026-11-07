@@ -53,6 +53,12 @@ with sync_playwright() as p:
     assert pathlib.Path(video).stat().st_size > 0
     subprocess.run(['ffprobe','-v','error','-show_entries','format=duration',video],check=True)
 PY
+.venv/bin/python - "$base" <<'PY_IDLE'
+from pathlib import Path
+import sys
+from ai_ux.release_checks import ensure_idle
+ensure_idle(Path(sys.argv[1]))
+PY_IDLE
 ln -s "$release" "$base/.current-$version"
 mv -Tf "$base/.current-$version" "$base/current"
 printf '%s\n' "INSTALL_OK $version"

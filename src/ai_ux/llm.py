@@ -13,7 +13,7 @@ from typing import TypeVar
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from .schema import Models, Provider
+from .schema import Credentials, Models, Provider
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -22,7 +22,7 @@ class LLMError(RuntimeError):
     """Deliberately excludes response bodies and credentials from messages."""
 
 
-def read_key(provider: Provider) -> str:
+def read_key(provider: Credentials) -> str:
     key = os.environ.get(provider.key_env, "").strip()
     if key:
         return key

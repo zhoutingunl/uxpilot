@@ -127,6 +127,23 @@ def test_streaming_transcript_before_release_is_preserved():
     )
 
 
+def test_report_displays_independent_asr_and_escapes_transcript(tmp_path):
+    run = {
+        "task_id": "voice",
+        "run_id": "voice-01",
+        "attempt": 1,
+        "goal": "Listen",
+        "stop_reason": "explorer_done",
+        "duration_ms": 100,
+        "judge_status": "completed",
+        "speech_review": {"status": "completed", "model": "asr-1.0", "transcript": "<script>unsafe</script>"},
+    }
+    render(tmp_path, {"batch_id": "test", "target_url": "https://duck.qbox.net", "runs": [run], "issues": []})
+    body = (tmp_path / "report.html").read_text()
+    assert "<script>" not in body and "&lt;script&gt;" in body
+    assert "voice-01/response.wav" in body and "voice-01/speech-review.json" in body
+
+
 def test_dedupe_does_not_confirm_single_run_and_html_escapes_model_output(tmp_path):
     issue = {
         "title": "<script>bad</script>",
