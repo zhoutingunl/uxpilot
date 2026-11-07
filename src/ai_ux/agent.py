@@ -19,6 +19,7 @@ from .report import aggregate, render
 from .repository import Repository, prepare_repository
 from .schema import Action, Config, Judgement, StrictModel, Task
 from .source_map import locate_sources
+from .speech import SpeechClient
 from .verifier import verify
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
@@ -60,6 +61,9 @@ async def judge_run(llm, evidence, task, verification, video_info, execution_sta
                     "verification.json",
                     "resources.json",
                     "audio.json",
+                    "speech-review.json",
+                    "speech-calls.json",
+                    "input-speech.json",
                     "session.mp4",
                     "review.mp4",
                     "video-timeline.json",
@@ -81,6 +85,7 @@ async def judge_run(llm, evidence, task, verification, video_info, execution_sta
             "step": o["step"],
             "t_ms": o["t_ms"],
             "url": o["url"],
+            "language": o.get("language"),
             "statuses": o.get("statuses", []),
             "frames": o.get("frames", []),
             "viewport": o.get("viewport"),
@@ -98,6 +103,16 @@ async def judge_run(llm, evidence, task, verification, video_info, execution_sta
         "timeline": timeline,
         "evidence_refs": references,
         "video": video_info,
+        "audio": (
+            json.loads((evidence.root / "audio.json").read_text())
+            if (evidence.root / "audio.json").is_file()
+            else None
+        ),
+        "speech_review": (
+            json.loads((evidence.root / "speech-review.json").read_text())
+            if (evidence.root / "speech-review.json").is_file()
+            else None
+        ),
         "timing_note": "Agent LLM decision time is not product response time; use display/action timestamps.",
         "single_attempt": True,
         "video_clock": "review.mp4 omits LLM deliberation-only waits; use video-timeline.json mapping. session.mp4 is the original uncut recording.",
@@ -198,6 +213,7 @@ async def run_task(
     browser = task.browser or config.browser
     runtime = BrowserRuntime(config.app, browser, task, evidence)
     llm = LLM(config.models, on_call=lambda c: evidence.event("model_call", **c))
+    speech = SpeechClient(config.speech, evidence) if config.speech and task.audio else None
     result = {
         "run_id": run_id,
         "replay_path": "replay.html",
@@ -222,6 +238,10 @@ async def run_task(
             result["deployment"] = None
     try:
         async with asyncio.timeout(task.timeout_seconds):
+            if speech:
+                task = await speech.prepare(task)
+                runtime.task = task
+                evidence.write("task.json", task.model_dump())
             evidence.event("stage", stage="browser", status="running")
             await runtime.start()
             for step in range(task.max_steps):
@@ -267,7 +287,6 @@ async def run_task(
             else:
                 result["stop_reason"] = "step_limit"
             await runtime.observe(len(evidence.observations))
-            verification = await verify(runtime, task.assertions)
     except asyncio.CancelledError:
         result["stop_reason"] = "interrupted"
         result["error"] = "interrupted; browser evidence retained"
@@ -279,11 +298,19 @@ async def run_task(
         result["error"] = str(e)[:1000]
         evidence.event("stage_error", stage="browser", error=result["error"])
     finally:
-        if runtime.page and not runtime.page.is_closed() and verification["task_outcome"] == "not_verified":
+        if runtime.page and not runtime.page.is_closed():
+            if speech and config.speech.transcribe_responses and result["stop_reason"] != "interrupted":
+                try:
+                    result["speech_review"] = await speech.review_response(runtime, task)
+                except Exception as error:
+                    result["speech_review"] = {"status": "error", "error": type(error).__name__}
+                    evidence.write("speech-review.json", result["speech_review"])
             try:
                 verification = await asyncio.wait_for(verify(runtime, task.assertions), 10)
             except Exception:
                 pass
+        if speech:
+            await speech.close()
         evidence.write("verification.json", verification)
         evidence.event("verification", result=verification)
         try:
@@ -295,9 +322,9 @@ async def run_task(
         result["cleanup"] = runtime.cleanup
         result["browser_duration_ms"] = evidence.ms()
         result["duration_ms"] = evidence.ms()
-        result["model_calls"] = llm.calls
+        result["model_calls"] = llm.calls + (speech.calls if speech else [])
         evidence.write("run.json", result)
-        evidence.write("model-calls.json", llm.calls)
+        evidence.write("model-calls.json", result["model_calls"])
     try:
         if evidence.observations and result["stop_reason"] != "interrupted":
             log(f"[{run_id}] independent judge: video={runtime.video_info.get('status')}", flush=True)
@@ -323,10 +350,10 @@ async def run_task(
             result["source_mapping"] = {"status": "failed", "error": str(e)[:500]}
             evidence.write("source-map.json", result["source_mapping"])
     await llm.close()
-    result["model_calls"] = llm.calls
+    result["model_calls"] = llm.calls + (speech.calls if speech else [])
     result["duration_ms"] = evidence.ms()
     result["observation_count"] = len(evidence.observations)
-    evidence.write("model-calls.json", llm.calls)
+    evidence.write("model-calls.json", result["model_calls"])
     evidence.write("run.json", result)
     result["replay_path"] = render_replay(evidence.root, result)
     evidence.write("run.json", result)

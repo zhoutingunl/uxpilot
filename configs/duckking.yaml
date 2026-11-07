@@ -33,6 +33,14 @@ models:
       reasoning_effort: low
   validation_retries: 1
   max_calls_per_run: 32
+speech:
+  base_url: https://api.minimax.cn
+  key_env: MINIMAX_CN_API_KEY
+  key_file: ~/.secrets/minimax_api_key
+  tts_model: speech-2.8-hd
+  asr_model: asr-1.0
+  voice_id: male-qn-qingse
+  transcribe_responses: true
 browser:
   channel: chrome
   headless: true
@@ -51,6 +59,7 @@ tasks:
       - {id: nod-complete, kind: action_completed, action_name: nod}
       - {id: visible-before-action, kind: model_before_action, required: false}
   - id: local-voice
+    start_path: /?lang=zh
     goal: 使用本地优先语音，让小鸭点头。确认识别结果、动作和本轮反馈后结束。
     max_steps: 12
     timeout_seconds: 420
@@ -62,12 +71,16 @@ tasks:
       - {id: model-visible, kind: model_ready}
       - {id: local-text, kind: voice_transcript, source: local, role: user, contains: 点头}
       - {id: nod-complete, kind: action_completed, action_name: nod}
+      - {id: turn-complete, kind: voice_turn_completed}
   - id: cloud-voice
+    start_path: /?lang=zh
+    response_language: zh
     goal: 使用灵矽云端语音，让小鸭先点头再向前走。确认两项动作完成并收到回答。
     max_steps: 14
     timeout_seconds: 480
     audio:
-      path: ../fixtures/audio/sequence-loop.wav
+      source: minimax_tts
+      language: zh
       transcript: 先点头，再向前走。
     assertions:
       - {id: model-visible, kind: model_ready}
@@ -75,7 +88,13 @@ tasks:
       - {id: nod-complete, kind: action_completed, action_name: nod}
       - {id: walk-complete, kind: action_completed, action_name: walk}
       - {id: response-audio, kind: audio_received}
+      - {id: session-language, kind: voice_session_language, contains: zh}
+      - {id: cloud-answer, kind: voice_transcript, source: cloud, role: assistant}
+      - {id: turn-complete, kind: voice_turn_completed}
+      - {id: browser-playback, kind: audio_played}
+      - {id: spoken-confirmation, kind: response_speech, contains: 完成}
   - id: fallback-chat
+    start_path: /?lang=zh
     goal: 选择本地优先语音，问小鸭它现在感觉怎么样；等待回答后检查页面是否清楚地表明这一轮已经结束。
     max_steps: 14
     timeout_seconds: 480
@@ -86,6 +105,70 @@ tasks:
       - {id: local-text, kind: voice_transcript, source: local, role: user}
       - {id: cloud-answer, kind: voice_transcript, source: cloud, role: assistant}
       - {id: response-audio, kind: audio_received}
+      - {id: turn-complete, kind: voice_turn_completed}
+      - {id: browser-playback, kind: audio_played}
+  - id: language-en
+    start_path: /?lang=zh
+    goal: 在语言菜单将界面切换为 English，检查导航、语音按钮与状态提示是否为英语。刷新页面，确认英语选择和当前房间保留。不连接语音。
+    max_steps: 10
+    timeout_seconds: 360
+    assertions:
+      - {id: english-document, kind: page_language, contains: en}
+      - {id: english-voice, kind: text, selector: '#connect-label', contains: Connect Linx}
+      - {id: english-home, kind: text, selector: '.site-topbar nav a[href*="index.html"]', contains: Home}
+  - id: language-fr
+    start_path: /?lang=zh
+    goal: 在语言菜单将界面切换为 Français，检查导航、语音按钮与状态提示是否为法语。刷新页面，确认法语选择和当前房间保留。不连接语音。
+    max_steps: 10
+    timeout_seconds: 360
+    assertions:
+      - {id: french-document, kind: page_language, contains: fr}
+      - {id: french-voice, kind: text, selector: '#connect-label', contains: Connecter Linx}
+      - {id: french-home, kind: text, selector: '.site-topbar nav a[href*="index.html"]', contains: Accueil}
+  - id: cloud-voice-en
+    start_path: /?lang=en
+    response_language: en
+    goal: 在英语界面连接灵矽，用英语语音请小鸭点头。检查识别原文、点头动作和英语回答，等待回答播放完毕再结束。
+    expected_outcome: 英语界面与语音连接请求使用 en，本轮英语转写包含 nod，实际完成 nod 动作，收到英语回答文本和非静音音频，浏览器完成播放。
+    max_steps: 16
+    timeout_seconds: 480
+    audio:
+      source: minimax_tts
+      language: en
+      transcript: Please nod your head.
+      hold_ms: 4200
+    assertions:
+      - {id: english-document, kind: page_language, contains: en}
+      - {id: session-language, kind: voice_session_language, contains: en}
+      - {id: cloud-text, kind: voice_transcript, source: cloud, role: user, contains: nod}
+      - {id: nod-complete, kind: action_completed, action_name: nod}
+      - {id: cloud-answer, kind: voice_transcript, source: cloud, role: assistant}
+      - {id: response-audio, kind: audio_received}
+      - {id: turn-complete, kind: voice_turn_completed}
+      - {id: browser-playback, kind: audio_played}
+      - {id: spoken-confirmation, kind: response_speech, contains: nod}
+  - id: cloud-voice-fr
+    start_path: /?lang=fr
+    response_language: fr
+    goal: 在法语界面连接灵矽，用法语语音请小鸭点头。检查识别原文、点头动作和法语回答，等待回答播放完毕再结束。
+    expected_outcome: 法语界面与语音连接请求使用 fr，本轮法语转写包含 tête，实际完成 nod 动作，收到法语回答文本和非静音音频，浏览器完成播放。
+    max_steps: 16
+    timeout_seconds: 480
+    audio:
+      source: minimax_tts
+      language: fr
+      transcript: Fais oui de la tête, s'il te plaît.
+      hold_ms: 5200
+    assertions:
+      - {id: french-document, kind: page_language, contains: fr}
+      - {id: session-language, kind: voice_session_language, contains: fr}
+      - {id: cloud-text, kind: voice_transcript, source: cloud, role: user, contains: tête}
+      - {id: nod-complete, kind: action_completed, action_name: nod}
+      - {id: cloud-answer, kind: voice_transcript, source: cloud, role: assistant}
+      - {id: response-audio, kind: audio_received}
+      - {id: turn-complete, kind: voice_turn_completed}
+      - {id: browser-playback, kind: audio_played}
+      - {id: spoken-confirmation, kind: response_speech, contains: tête}
   - id: kick-ball
     start_path: /scenarios.html
     goal: 找到踢球场景，让小鸭用左脚踢球，看见过程并找到实际触球和位移结果。

@@ -22,6 +22,7 @@ async def test_generic_form_navigation_select_keyboard_and_health(tmp_path):
             await r.start()
             await r.page.set_content("""<title>Form</title><label for="name">Name</label><input id="name">
             <label for="choice">Choice</label><select id="choice"><option value="a">A</option><option value="b">B</option></select>
+            <label for="locked">Locked</label><select id="locked" disabled><option value="a">A</option></select>
             <button id="submit">Confirm</button><div role="status" id="result"></div>
             <script>document.querySelector('#submit').onclick=()=>document.querySelector('#result').textContent='Saved '+document.querySelector('#name').value;</script>""")
             obs = await r.observe(0)
@@ -29,6 +30,11 @@ async def test_generic_form_navigation_select_keyboard_and_health(tmp_path):
             def node(label):
                 return next(n["id"] for n in obs["nodes"] if n["name"] == label)
 
+            for kind in ("select", "click"):
+                result = await r.perform(
+                    Action(kind=kind, target=node("Locked"), text="a", rationale="check")
+                )
+                assert not result["ok"] and result["error"].startswith("observed control is disabled")
             assert (await r.perform(Action(kind="fill", target=node("Name"), text="Test", rationale="name")))[
                 "ok"
             ]

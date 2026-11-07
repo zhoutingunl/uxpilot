@@ -38,6 +38,8 @@ bash install-jfcs62.sh <archive.tar.gz> <归档SHA256> <version>
 
 安装运行完整测试、分支覆盖率、Ruff 和录像预检后切换 `current`。随后运行：
 
+切换前会再次检查旧队列与工作台均为空闲。发布元数据和健康接口包含 `repository_commit` 与 `workspace_dirty`，用于核对部署代码与 Git 提交。
+
 ```sh
 current/.venv/bin/python current/deploy/publish-jfcs62.py
 ```
@@ -54,5 +56,15 @@ journalctl -u duckking-ux-web.service -n 60 --no-pager
 curl --fail http://10.210.32.30:18765/api/health
 curl --fail http://10.210.32.30:18765/api/errors
 ```
+
+部署后的多语言回归使用同一套配置和主机 Chrome：
+
+```sh
+cd /root/zt_dir/ai_base/DuckKing_ux_review/current
+.venv/bin/uxpilot --config configs/jfcs62.yaml check-locales
+.venv/bin/uxpilot --config configs/jfcs62.yaml eval --task cloud-voice-en --task cloud-voice-fr
+```
+
+界面矩阵不调用评测模型；语音任务使用主机仓库外的 MiniMax Key 自动生成输入和复核回复，会消耗订阅及灵矽额度。
 
 页面刷新不会中断任务。服务重启时原版工作台会把进行中的任务标为 interrupted，不自动重复付费调用。升级前先等当前任务结束；回滚代码时保留 workbench 与所有历史证据。

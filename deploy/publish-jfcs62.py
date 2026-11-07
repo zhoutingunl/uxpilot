@@ -37,6 +37,7 @@ assert suites and all(int(s.get("failures", "0")) == int(s.get("errors", "0")) =
 passed = sum(int(s.get("tests", "0")) - int(s.get("skipped", "0")) for s in suites)
 counts = json.loads((release / "verification/coverage.json").read_text())["totals"]
 row = {key: meta[key] for key in ("version", "snapshot_sha256", "built_at", "operator", "target")}
+row.update({key: meta[key] for key in ("repository_commit", "workspace_dirty") if key in meta})
 row.update(
     changes=meta["changes"],
     previous_version=previous["version"] if previous else None,

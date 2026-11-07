@@ -11,17 +11,48 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class Provider(StrictModel):
+class Credentials(StrictModel):
+    key_env: str
+    key_file: str | None = None
+
+
+class Provider(Credentials):
     name: str
     model: str
     endpoint: str
-    key_env: str
-    key_file: str | None = None
     timeout_seconds: int = Field(default=120, ge=5, le=600)
     max_tokens: int = Field(default=4096, ge=256, le=16384)
     request_options: dict = Field(default_factory=dict)
     stream: bool = True
     video_chunk_seconds: int | None = Field(default=None, ge=2, le=60)
+
+
+class Speech(Credentials):
+    key_env: str = "MINIMAX_CN_API_KEY"
+    key_file: str | None = "~/.secrets/minimax_api_key"
+    base_url: str = "https://api.minimax.cn"
+    tts_model: str = "speech-2.8-hd"
+    asr_model: str = "asr-1.0"
+    voice_id: str = "male-qn-qingse"
+    timeout_seconds: int = Field(default=90, ge=5, le=240)
+    max_audio_bytes: int = Field(default=8_000_000, ge=1000, le=50_000_000)
+    transcribe_responses: bool = True
+
+    @model_validator(mode="after")
+    def trusted_endpoint(self):
+        from urllib.parse import urlsplit
+
+        url = urlsplit(self.base_url)
+        if (
+            url.scheme != "https"
+            or not url.hostname
+            or url.username
+            or url.password
+            or url.query
+            or url.fragment
+        ):
+            raise ValueError("speech base_url must be credential-free HTTPS")
+        return self
 
 
 class Models(StrictModel):
@@ -78,6 +109,11 @@ class Assertion(StrictModel):
         "text",
         "voice_transcript",
         "audio_received",
+        "audio_played",
+        "voice_turn_completed",
+        "voice_session_language",
+        "page_language",
+        "response_speech",
         "model_before_action",
         "viewport_overlap",
     ]
@@ -98,14 +134,20 @@ class Assertion(StrictModel):
             raise ValueError(f"{self.kind} requires selector")
         if self.kind == "viewport_overlap" and not self.other_selector:
             raise ValueError("viewport_overlap requires other_selector")
-        if self.kind in {"text", "url_contains"} and not self.contains:
-            raise ValueError("text requires contains")
+        if (
+            self.kind
+            in {"text", "url_contains", "page_language", "voice_session_language", "response_speech"}
+            and not self.contains
+        ):
+            raise ValueError(f"{self.kind} requires contains")
         return self
 
 
 class AudioFixture(StrictModel):
-    path: str
+    source: Literal["file", "minimax_tts"] = "file"
+    path: str | None = None
     transcript: str
+    language: Literal["zh", "en", "fr"] = "zh"
     loop_ms: int = Field(default=12000, ge=2000, le=30000)
     start_ms: int = Field(default=1500, ge=0, le=25000)
     hold_ms: int = Field(default=6200, ge=300, le=14500)
@@ -113,6 +155,10 @@ class AudioFixture(StrictModel):
 
     @model_validator(mode="after")
     def within_cycle(self):
+        if self.source == "file" and not self.path:
+            raise ValueError("file audio requires path")
+        if self.source == "minimax_tts" and self.input_kind != "synthetic_audio":
+            raise ValueError("generated audio must be synthetic_audio")
         if self.start_ms + self.hold_ms >= self.loop_ms:
             raise ValueError("audio hold must end before loop restarts")
         return self
@@ -128,6 +174,7 @@ class Task(StrictModel):
     repeats: int = Field(default=1, ge=1, le=5)
     browser: Browser | None = None
     audio: AudioFixture | None = None
+    response_language: Literal["zh", "en", "fr"] | None = None
     assertions: list[Assertion] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     expected_outcome: str | None = None
@@ -151,6 +198,7 @@ class Config(StrictModel):
     app: App
     models: Models
     browser: Browser = Field(default_factory=Browser)
+    speech: Speech | None = None
     output_dir: str = "artifacts/agent"
     tasks: list[Task]
 
@@ -160,6 +208,13 @@ class Config(StrictModel):
             raise ValueError("task ids must be unique")
         if not self.tasks:
             raise ValueError("at least one task required")
+        for task in self.tasks:
+            if task.audio and task.audio.source == "minimax_tts" and not self.speech:
+                raise ValueError("minimax_tts requires speech configuration")
+            if any(a.kind == "response_speech" for a in task.assertions) and (
+                not self.speech or not self.speech.transcribe_responses or not task.audio
+            ):
+                raise ValueError("response_speech requires audio and enabled speech transcription")
         return self
 
 
@@ -177,7 +232,7 @@ def load_config(path: Path) -> Config:
                 urlsplit(config.app.base_url).query
             ).get("room"):
                 raise ValueError("DuckKing start URLs must not select a pre-existing room")
-        if task.audio:
+        if task.audio and task.audio.source == "file":
             task.audio.path = str((path.parent / task.audio.path).resolve())
             if not Path(task.audio.path).is_file():
                 raise ValueError(f"audio fixture missing for task {task.id}")

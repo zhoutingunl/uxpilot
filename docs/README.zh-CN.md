@@ -69,4 +69,33 @@ uv run uxpilot --config artifacts/projects/<id>/project.yaml \
 
 原始录屏保留，评审精简视频会移除模型思考等待并提供时间映射。录屏无声，2 fps 不能用于高速物理动作或扬声器听感验收。只有一次出现的问题保持 `needs_review`。
 
+## DuckKing 多语言与语音
+
+当前 GLM-5.3-Flash / MiniMax-M3.1-Flash 评测接口发送文字、截图和视频，没有直接发送音频或执行 ASR。产品语音功能仍然可以测试：合成 WAV → 浏览器麦克风 → DuckKing 真实识别／灵矽 → 动作与回复 → 独立验收。评测模型看界面、转写和协议证据；不把无声录屏当作听过了语音。
+
+已将 MiniMax 独立语音服务接入评测流水线：`speech-2.8-hd` 生成中英法麦克风输入，`asr-1.0` 独立转写实际回复。配置 `speech` 后，`audio.source: minimax_tts` 自动生成循环 WAV；保留 `source: file` 的已有样本。凭据复用 `MINIMAX_CN_API_KEY` 或仓库外 `~/.secrets/minimax_api_key`，可使用 M Plan 订阅 Key。每项语音任务最多增加一次生成和一次转写调用，实际调用进入模型用量与事件记录。
+
+```bash
+# 中文本地优先、中文云端与聊天回退
+uv run uxpilot --config configs/duckking.yaml eval \
+  --task local-voice --task cloud-voice --task fallback-chat
+
+# 英法界面切换、刷新保持，以及真实英法语音
+uv run uxpilot --config configs/duckking.yaml eval \
+  --task language-en --task language-fr \
+  --task cloud-voice-en --task cloud-voice-fr
+
+# 十个页面 × 桌面/手机，140 项导航、切换和刷新场景；不调用评测模型
+uv run uxpilot --config configs/duckking.yaml check-locales
+
+# 只复查一个页面的手机布局
+uv run uxpilot --config configs/duckking.yaml check-locales --page index.html --viewport mobile
+```
+
+中文支持本地优先；英语和法语直接使用灵矽云端。配置通过 `?lang=zh|en|fr` 明确界面／下一次连接语言，合成样本与目标语种对应。界面切换用例检查文档语言和关键按钮翻译；语音用例分别检查连接请求语言、本轮识别文本、实际动作、回答文本、非静音 PCM、回答结束和浏览器播放完成。
+
+`audio_received` 证明本轮收到有效非静音 PCM；`audio_played` 检查浏览器播放完成；`response_speech` 验证独立 ASR 中的配置关键词，报告提供转写、WAV 试听和 `speech-review.json`。只截取最后一次说话后的回复，混合采样率、截断或尚未播完的音频不会算作通过。`voice_session_language` 只验证请求语言。**关键词通过不代表完整语义、发音或语种准确率，物理扬声器及真人口音／噪声表现仍需独立验收。** 通用 `review` 自动生成任务时没有配置语音夹具，不能据此声称已覆盖语音。
+
+`check-locales` 通过真实语言菜单检查中文、英语、法语的关键文案、当前选项、房间保持、原地切换、画布保留、英法云端模式限制、刷新与跨页保持，以及手机语言入口和横向溢出。先等待异步识别模式初始化完成，再验收状态。输出 `locale-report.html/json`、逐步截图、事件与录屏；覆盖十页的关键界面，不代表所有翻译均正确。
+
 [架构图](architecture.md) · [验证记录](validation.md) · [测试覆盖率](coverage.md)

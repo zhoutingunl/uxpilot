@@ -246,3 +246,47 @@ async def test_judge_uses_native_video_chunks_before_fallback_synthesis(tmp_path
 def test_source_version_nonexistent_path_returns_none(tmp_path):
     assert agent.source_version(None) is None
     assert agent.source_version(str(tmp_path / "missing")) is None
+
+
+async def test_speech_is_prepared_before_browser_and_verified_before_judge(
+    tmp_path, monkeypatch, fake_engine
+):
+    from ai_ux.schema import Assertion, AudioFixture, Speech
+
+    cfg = config(tmp_path, monkeypatch)
+    cfg.speech = Speech(key_env="TEST_BACKUP_KEY", key_file=None)
+    cfg.tasks[0].audio = AudioFixture(source="minimax_tts", transcript="Nod.", language="en")
+    cfg.tasks[0].response_language = "en"
+    cfg.tasks[0].assertions = [Assertion(id="reply", kind="response_speech", contains="nodded")]
+    closed = []
+
+    class Voice:
+        def __init__(self, settings, evidence):
+            self.evidence = evidence
+            self.calls = []
+
+        async def prepare(self, task):
+            assert not any(e["kind"] == "browser_started" for e in self.evidence.events)
+            self.calls.append({"model": "speech-2.8-hd", "purpose": "speech_tts", "status": "ok"})
+            prepared = task.model_copy(deep=True)
+            prepared.audio.path = str(self.evidence.root / "microphone.wav")
+            return prepared
+
+        async def review_response(self, runtime, task):
+            assert runtime.task.audio.path.endswith("microphone.wav")
+            assert any(e["kind"] == "browser_started" for e in self.evidence.events)
+            result = {"status": "completed", "model": "asr-1.0", "transcript": "I nodded."}
+            self.calls.append({"model": "asr-1.0", "purpose": "speech_asr", "status": "ok"})
+            self.evidence.event("response_transcript", **result)
+            self.evidence.write("speech-review.json", result)
+            return result
+
+        async def close(self):
+            closed.append(True)
+
+    monkeypatch.setattr(agent, "SpeechClient", Voice)
+    result = await agent.run_task(cfg, cfg.tasks[0], tmp_path, 1, log=lambda *a, **k: None)
+    assert result["verification"]["task_outcome"] == "passed" and result["judge_status"] == "completed"
+    assert {c["model"] for c in result["model_calls"]} >= {"speech-2.8-hd", "asr-1.0"}
+    judge_payload = next(data for schema, data, _ in FakeLLM.calls_seen if schema == Judgement)
+    assert judge_payload["speech_review"]["transcript"] == "I nodded." and closed

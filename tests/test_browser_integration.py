@@ -8,13 +8,16 @@ from ai_ux.schema import Action, App, Browser, Task
 
 
 @asynccontextmanager
-async def local_site():
+async def local_site(html=None):
     import asyncio
 
-    html = b"""<!doctype html><title>Fixture</title><button id="run">Count</button><span id="count">0</span>
+    html = (
+        html
+        or b"""<!doctype html><title>Fixture</title><button id="run">Count</button><span id="count">0</span>
     <div id="activation">DO-NOT-RECORD-THIS-CODE</div><input type="password" value="PASSWORD-SECRET">
     <a href="https://outside.invalid/">External</a>
     <script>document.querySelector('#run').onclick=()=>document.querySelector('#count').textContent='1';</script>"""
+    )
 
     async def handle(reader, writer):
         await reader.read(8192)

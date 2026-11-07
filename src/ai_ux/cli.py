@@ -11,6 +11,7 @@ from pathlib import Path
 from .agent import evaluate, rejudge
 from .discovery import discover
 from .llm import read_key
+from .locales import check_locales
 from .probe import probe
 from .schema import load_config
 
@@ -35,6 +36,12 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("validate-config", help="校验配置，不联网")
     commands.add_parser("doctor", help="检查环境和凭据是否存在，不打印密钥")
+    locales = commands.add_parser(
+        "check-locales", help="DuckKing 中英法菜单、刷新、跨页保持与桌面/手机布局回归"
+    )
+    locales.add_argument("--output", type=Path)
+    locales.add_argument("--page", action="append", dest="pages")
+    locales.add_argument("--viewport", action="append", choices=["desktop", "mobile"], dest="viewports")
     pr = commands.add_parser("probe-video", help="给两个供应商发送带随机代码的短视频，验证原生视频识别")
     pr.add_argument("--output", type=Path)
     review = commands.add_parser("judge", help="复用已有浏览器证据重跑 Judge，保留旧评审")
@@ -83,6 +90,11 @@ def main():
 
             return asyncio.run(review_project())
         config = load_config(args.config.resolve())
+        if args.command == "check-locales":
+            _, result = asyncio.run(
+                check_locales(config, output=args.output, pages=args.pages, viewports=args.viewports)
+            )
+            return 0 if result["status"] == "passed" else 2
         if args.command == "validate-config":
             print(json.dumps({"valid": True, "tasks": [t.id for t in config.tasks]}, ensure_ascii=False))
             return 0
@@ -101,6 +113,13 @@ def main():
                             for p in [config.models.primary, config.models.fallback]
                         ],
                         "tasks": len(config.tasks),
+                        "speech": None
+                        if not config.speech
+                        else {
+                            "tts_model": config.speech.tts_model,
+                            "asr_model": config.speech.asr_model,
+                            "credential_available": bool(read_key(config.speech)),
+                        },
                     },
                     ensure_ascii=False,
                     indent=2,
