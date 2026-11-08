@@ -133,7 +133,21 @@ uv run uxpilot --config configs/duckking.yaml check-locales
 uv run uxpilot --config configs/duckking.yaml check-locales --page index.html --viewport mobile
 ```
 
-The default matrix covers ten pages, three languages, desktop and mobile (140 navigation/switch/reload cases). It operates the real language menu and checks key UI text, selected language, room/document/canvas preservation, non-Chinese cloud-mode restrictions, reload/cross-page persistence and horizontal overflow. It waits for asynchronous voice-mode initialization. Results, screenshots, events and recordings are retained under `locales-<batch>/`; `locale-report.html` lists each check. This adapter-specific matrix does not establish that every translation or every speech workflow is correct.
+The default matrix covers ten pages, three languages, desktop and mobile (140 navigation/switch/reload cases). It operates the real language menu and checks key UI text, selected language, room/document/first canvas node preservation, non-Chinese cloud-mode restrictions, reload/cross-page persistence and horizontal overflow. It waits for asynchronous voice-mode initialization. Results, screenshots, events and recordings are retained under `locales-<batch>/`; `locale-report.html` lists each check. It does not exercise scene contents, release/restart or end-of-performance behavior, or establish complete translation and speech accuracy.
+
+Run the separate scene lifecycle regression:
+
+```bash
+uv run uxpilot --config configs/duckking.yaml check-scenes
+# Add native-video review using only the configured primary provider (GLM):
+uv run uxpilot --config configs/duckking.yaml check-scenes --judge
+# Debug just the release/restart path:
+uv run uxpilot --config configs/duckking.yaml check-scenes --case release
+```
+
+This check loads and releases a ball scene, samples the idle state for five seconds, then checks that it can restart. It also plays act 07 in prerecorded rehearsal mode and checks that both canvas nodes remain visible for five seconds after completion. A successful restart or completed action does not override a failed final-state check. Screenshots, uncut recordings, individual checks and optional model review are retained in `scene-report.html` and `scene-report.json`; unavailable prerequisites remain `blocked`. Canvas presence alone does not prove correct 3D contents; review the images/video for that.
+
+The duet may claim exactly one additional room, registered only after its allocation succeeds in the isolated browser context. Both owned scenes are conditionally released after browser shutdown; busy rooms are retained. Normal Explorer runs keep their existing single-room restriction. Scene checks block cloud voice connections and never call the speech services. With `--judge`, only `models.primary` is used, including on errors; the configured fallback is not contacted. Exit code 2 means a failed/blocked scene check or unavailable requested Judge, not a successful acceptance.
 
 ## Tests
 

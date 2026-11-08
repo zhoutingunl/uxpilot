@@ -541,22 +541,33 @@ class BrowserRuntime:
                     cookies=cleanup_cookies,
                     headers={"Origin": f"{origin.scheme}://{origin.netloc}"},
                 ) as client:
-                    for attempt in range(3):
-                        url = (
-                            self.app.base_url.rstrip("/")
-                            + "/api/scenes/close?if_unused=true&room="
-                            + self.owned_room
-                        )
-                        response = await client.post(url)
-                        if response.status_code in {204, 404}:
-                            self.cleanup = {"status": "released", "http_status": response.status_code}
-                            break
-                        if response.status_code != 409:
-                            self.cleanup = {"status": "failed", "http_status": response.status_code}
-                            break
-                        self.cleanup = {"status": "retained_busy_room", "http_status": 409}
-                        if attempt < 2:
-                            await asyncio.sleep(0.4)
+                    rooms = [self.owned_room, *sorted(self.policy.additional_rooms)]
+                    results = {}
+                    for room in rooms:
+                        for attempt in range(3):
+                            url = (
+                                self.app.base_url.rstrip("/")
+                                + "/api/scenes/close?if_unused=true&room="
+                                + room
+                            )
+                            response = await client.post(url)
+                            if response.status_code in {204, 404}:
+                                results[room] = {"status": "released", "http_status": response.status_code}
+                                break
+                            if response.status_code != 409:
+                                results[room] = {"status": "failed", "http_status": response.status_code}
+                                break
+                            results[room] = {"status": "retained_busy_room", "http_status": 409}
+                            if attempt < 2:
+                                await asyncio.sleep(0.4)
+                    self.cleanup = results[self.owned_room]
+                    if len(rooms) > 1:
+                        self.cleanup = {
+                            "status": "released"
+                            if all(r["status"] == "released" for r in results.values())
+                            else "incomplete",
+                            "rooms": results,
+                        }
             except (httpx.HTTPError, ValueError):
                 self.cleanup = {"status": "failed"}
         self.evidence.event("cleanup", **self.cleanup)
