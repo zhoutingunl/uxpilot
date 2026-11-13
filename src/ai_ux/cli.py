@@ -13,6 +13,7 @@ from .discovery import discover
 from .llm import read_key
 from .locales import check_locales
 from .probe import probe
+from .scenes import check_scenes
 from .schema import load_config
 
 
@@ -42,6 +43,12 @@ def main():
     locales.add_argument("--output", type=Path)
     locales.add_argument("--page", action="append", dest="pages")
     locales.add_argument("--viewport", action="append", choices=["desktop", "mobile"], dest="viewports")
+    scenes = commands.add_parser("check-scenes", help="DuckKing 释放/重启和双场景演出完成后的生命周期回归")
+    scenes.add_argument("--output", type=Path)
+    scenes.add_argument("--case", action="append", choices=["release", "duel"], dest="cases")
+    scenes.add_argument(
+        "--judge", action="store_true", help="仅用 primary 模型评审录屏，不使用 fallback 或语音服务"
+    )
     pr = commands.add_parser("probe-video", help="给两个供应商发送带随机代码的短视频，验证原生视频识别")
     pr.add_argument("--output", type=Path)
     review = commands.add_parser("judge", help="复用已有浏览器证据重跑 Judge，保留旧评审")
@@ -90,6 +97,11 @@ def main():
 
             return asyncio.run(review_project())
         config = load_config(args.config.resolve())
+        if args.command == "check-scenes":
+            _, result = asyncio.run(
+                check_scenes(config, output=args.output, cases=args.cases, judge=args.judge)
+            )
+            return 0 if result["status"] == "passed" and result.get("judge_status") != "failed" else 2
         if args.command == "check-locales":
             _, result = asyncio.run(
                 check_locales(config, output=args.output, pages=args.pages, viewports=args.viewports)

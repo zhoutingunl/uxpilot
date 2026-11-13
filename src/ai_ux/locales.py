@@ -97,7 +97,7 @@ def render(root, report):
     table{border-collapse:collapse;width:100%}th,td{text-align:left;border-bottom:1px solid #ddd;padding:10px}a{color:#176342}</style>
     <h1>DuckKing 多语言切换验收</h1>"""
     body += f"<p>结果：{html.escape(report['status'])}；{len(report['cases'])} 个检查场景。目标：{html.escape(report['target_url'])}</p>"
-    body += "<p>通过真实语言菜单切换，核对关键界面文案、房间、页面与画布保持、移动端布局、刷新及跨页保持。此报告不代表所有文案翻译准确或语音已经验收。</p>"
+    body += "<p>通过真实语言菜单切换，核对关键界面文案、房间、页面与首个画布节点保持、移动端布局、刷新及跨页保持。未验证场景内容、双场景演出完成后的保留、释放与重新加载、全部翻译或语音；这些路径不能据此标记通过。</p>"
     body += (
         "<table><thead><tr><th>视口</th><th>页面</th><th>语言</th><th>阶段</th><th>结果</th><th>失败项 / 错误</th><th>证据</th></tr></thead><tbody>"
         + "".join(rows)
@@ -124,7 +124,14 @@ async def check_locales(config, *, output=None, pages=None, viewports=None):
         "status": "running",
         "cases": [],
         "runtimes": [],
-        "scope": "zh/en/fr menu, key UI copy, reload/cross-page persistence, room/canvas preservation and layout; not full translation or speech accuracy",
+        "scope": "zh/en/fr menu, key UI copy, reload/cross-page persistence, room/first canvas node preservation and layout",
+        "not_tested": [
+            "scene rendering contents",
+            "dual scene persistence after demo completion",
+            "scene release/reload",
+            "full translation accuracy",
+            "speech accuracy",
+        ],
     }
     for viewport in viewports:
         evidence = Evidence(root / viewport)

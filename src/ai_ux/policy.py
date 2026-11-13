@@ -50,6 +50,9 @@ class Policy:
     def __init__(self, app: App):
         self.app = app
         self.room: str | None = None
+        # Only dedicated deterministic checks may register a second room after
+        # observing its successful allocation in this isolated browser context.
+        self.additional_rooms: set[str] = set()
 
     def check_url(self, url: str) -> str:
         target = urljoin(self.app.base_url, url)
@@ -61,7 +64,7 @@ class Policy:
         if self.app.environment == "local" and p.hostname not in {"127.0.0.1", "localhost", "::1"}:
             raise ValueError("local environment requires loopback URL")
         room = dict(parse_qsl(p.query)).get("room")
-        if self.room and room and room != self.room:
+        if self.room and room and room != self.room and room not in self.additional_rooms:
             raise ValueError("cannot switch to another user's room")
         return target
 
