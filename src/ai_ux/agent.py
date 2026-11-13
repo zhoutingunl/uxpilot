@@ -13,7 +13,7 @@ import httpx
 from .browser import BrowserRuntime
 from .evidence import Evidence
 from .llm import LLM, LLMError
-from .media import review_video, split_review_video
+from .media import relative_video_events, review_video, silent_model_video, split_review_video
 from .replay import render_replay
 from .report import aggregate, render
 from .repository import Repository, prepare_repository
@@ -66,6 +66,7 @@ async def judge_run(llm, evidence, task, verification, video_info, execution_sta
                     "input-speech.json",
                     "session.mp4",
                     "review.mp4",
+                    "judge.mp4",
                     "video-timeline.json",
                 }
             )
@@ -114,16 +115,27 @@ async def judge_run(llm, evidence, task, verification, video_info, execution_sta
             else None
         ),
         "timing_note": "Agent LLM decision time is not product response time; use display/action timestamps.",
+        "audio_note": "Human report videos may contain captured audio. The video sent to this visual Judge is silent; do not claim to have heard it. Speech transcripts, if supplied, are separate evidence.",
         "single_attempt": True,
         "video_clock": "review.mp4 omits LLM deliberation-only waits; use video-timeline.json mapping. session.mp4 is the original uncut recording.",
         "output_limit": "最多5个最有证据的问题；summary不超过150字，每个问题只写1-3条观察。",
     }
     images = [evidence.resolve(o["screenshot"]) for o in evidence.observations[-2:]]
     video = (
-        evidence.root / video_info.get("review", {}).get("path", "session.mp4")
+        evidence.root
+        / (
+            video_info.get("review", {}).get("model_path")
+            or video_info.get("review", {}).get("path", "session.mp4")
+        )
         if video_info.get("status") == "ready"
         else None
     )
+    if (
+        video
+        and video_info.get("audio") == "recorded_browser_audio"
+        and not video_info.get("review", {}).get("model_path")
+    ):
+        video = await silent_model_video(video, evidence.root / "judge.mp4")
     failures = []
     judge = None
     for provider in [llm.config.primary, llm.config.fallback]:
@@ -438,7 +450,7 @@ async def rejudge(config: Config, root: Path):
         review = await review_video(
             root / "session.mp4",
             root / "review.mp4",
-            [{**e, "t_ms": max(0, e["t_ms"] - start_ms)} for e in evidence.events],
+            relative_video_events(evidence.events, start_ms),
             result["video"]["duration_seconds"],
             config.browser.video_max_bytes,
         )

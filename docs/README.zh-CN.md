@@ -67,11 +67,11 @@ uv run uxpilot --config artifacts/projects/<id>/project.yaml \
 
 公开资源的 GET/HEAD 默认允许，用于正常加载 CDN；导航仍限制在配置域名内。额外导航域名用 `--allow-host`，资源域名用 `--resource-host`。登录、验证码、第三方支付和复杂富文本操作不是保证开箱即用的范围，必要时记录受限并补充测试配置。
 
-原始录屏保留，评审精简视频会移除模型思考等待并提供时间映射。录屏无声，2 fps 不能用于高速物理动作或扬声器听感验收。只有一次出现的问题保持 `needs_review`。
+原始录屏保留，评审精简视频会移除模型思考等待并提供时间映射。DuckKing 新录屏会保存测试麦克风输入和网页 Web Audio 输出音轨；精简版按相同边界剪切音画，并保留完整语音时段。2 fps 不用于高速物理动作验收，数字音轨也不等于真实扬声器实录。只有一次出现的问题保持 `needs_review`。
 
 ## DuckKing 多语言与语音
 
-当前 GLM-5.3-Flash / MiniMax-M3.1-Flash 评测接口发送文字、截图和视频，没有直接发送音频或执行 ASR。产品语音功能仍然可以测试：合成 WAV → 浏览器麦克风 → DuckKing 真实识别／灵矽 → 动作与回复 → 独立验收。评测模型看界面、转写和协议证据；不把无声录屏当作听过了语音。
+当前 GLM-5.3-Flash / MiniMax-M3.1-Flash 评测接口发送文字、截图和视频，没有直接发送音频或执行 ASR。产品语音功能仍然可以测试：合成 WAV → 浏览器麦克风 → DuckKing 真实识别／灵矽 → 动作与回复 → 独立验收。评测模型看界面、转写和协议证据。人工报告使用带声视频，视觉 Judge 使用同画面的无声 judge.mp4 副本，不声称模型听过语音。
 
 已将 MiniMax 独立语音服务接入评测流水线：`speech-2.8-hd` 生成中英法麦克风输入，`asr-1.0` 独立转写实际回复。配置 `speech` 后，`audio.source: minimax_tts` 自动生成循环 WAV；保留 `source: file` 的已有样本。凭据复用 `MINIMAX_CN_API_KEY` 或仓库外 `~/.secrets/minimax_api_key`，可使用 M Plan 订阅 Key。每项语音任务最多增加一次生成和一次转写调用，实际调用进入模型用量与事件记录。
 
@@ -99,3 +99,5 @@ uv run uxpilot --config configs/duckking.yaml check-locales --page index.html --
 `check-locales` 通过真实语言菜单检查中文、英语、法语的关键文案、当前选项、房间保持、原地切换、画布保留、英法云端模式限制、刷新与跨页保持，以及手机语言入口和横向溢出。先等待异步识别模式初始化完成，再验收状态。输出 `locale-report.html/json`、逐步截图、事件与录屏；覆盖十页的关键界面，不代表所有翻译均正确。
 
 [架构图](architecture.md) · [验证记录](validation.md) · [测试覆盖率](coverage.md)
+
+音轨来源、同步、兼容范围及历史录像限制见 [音频录制说明](audio-recording.md)。

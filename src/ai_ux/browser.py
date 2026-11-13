@@ -9,8 +9,9 @@ from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 import httpx
 from playwright.async_api import async_playwright
 
+from .audio_recording import BrowserAudioRecorder
 from .evidence import Evidence
-from .media import encode_video, review_video
+from .media import encode_video, probe_media, relative_video_events, review_video
 from .policy import Policy, safe_url, scrub
 from .schema import Action, App, Assertion, Browser, Task
 from .verifier import check_events
@@ -49,6 +50,7 @@ class BrowserRuntime:
         self.initial_states_seen: set[str] = set()
         self.pending: set[asyncio.Task] = set()
         self.video_info = {"status": "disabled"}
+        self.audio_recorder = None
         self.response_audio_frames = 0
         self.response_audio_bytes = 0
         self.response_audio_rate = None
@@ -93,6 +95,14 @@ class BrowserRuntime:
                 record_video_size={"width": self.config.width, "height": self.config.height},
             )
         self.context = await self.browser.new_context(**kwargs)
+        if self.config.video and self.config.record_audio and self.app.adapter == "duckking":
+            self.audio_recorder = BrowserAudioRecorder(
+                self.evidence,
+                input_enabled=bool(self.task.audio),
+                max_seconds=self.config.video_max_seconds,
+                max_bytes=self.config.audio_max_bytes,
+            )
+            await self.audio_recorder.install(self.context)
         await self.context.route("**/*", self._route)
         await self.context.route_web_socket("**/*", self._ws_route)
         selectors = ",".join(self.config.redact_selectors)
@@ -118,7 +128,11 @@ class BrowserRuntime:
         })()"""
             )
         self.video_start_ms = self.evidence.ms()
+        if self.audio_recorder:
+            self.audio_recorder.start_offset_ms = self.video_start_ms
         self.page = await self.context.new_page()
+        if self.audio_recorder:
+            self.audio_recorder.page = self.page
         self.video_clock_uncertainty_ms = self.evidence.ms() - self.video_start_ms
         self.page.set_default_timeout(self.config.action_timeout_ms)
         self.page.on(
@@ -413,12 +427,18 @@ class BrowserRuntime:
                 self.evidence.event(
                     "audio_input_start", transcript=audio.transcript, input_kind=audio.input_kind
                 )
-                await self.page.mouse.down()
+                if self.audio_recorder:
+                    await self.audio_recorder.begin_input()
                 try:
+                    await self.page.mouse.down()
                     await self.page.wait_for_timeout(audio.hold_ms)
                 finally:
-                    await self.page.mouse.up()
-                    self.evidence.event("audio_input_end")
+                    try:
+                        await self.page.mouse.up()
+                    finally:
+                        if self.audio_recorder:
+                            await self.audio_recorder.end_input()
+                        self.evidence.event("audio_input_end")
             elif action.kind == "reload":
                 await self.page.reload(wait_until="domcontentloaded", timeout=30000)
             elif action.kind == "navigate":
@@ -519,6 +539,12 @@ class BrowserRuntime:
                 pass
             if self.config.video:
                 raw_video = self.page.video
+        if self.audio_recorder:
+            try:
+                await self.audio_recorder.stop()
+            except Exception:
+                # A recording/storage failure must never prevent room/browser cleanup.
+                self.audio_recorder.warnings.add("audio_capture_stop_failed")
         # Closing the page releases voice and viewer ownership before conditional scene cleanup.
         try:
             if self.context:
@@ -574,22 +600,32 @@ class BrowserRuntime:
         if raw_video:
             try:
                 source = Path(await raw_video.path())
-                info = await encode_video(
-                    source,
-                    self.evidence.root / "session.mp4",
-                    self.config.video_max_seconds,
-                    self.config.video_max_bytes,
-                )
+                mixed_audio = None
+                if self.audio_recorder:
+                    duration = (await probe_media(source))["duration_seconds"]
+                    mixed_audio = await self.audio_recorder.mix(self.video_start_ms, duration)
+                try:
+                    info = await encode_video(
+                        source,
+                        self.evidence.root / "session.mp4",
+                        self.config.video_max_seconds,
+                        self.config.video_max_bytes,
+                        audio_source=mixed_audio,
+                    )
+                finally:
+                    if mixed_audio:
+                        mixed_audio.unlink(missing_ok=True)
                 self.video_info = {
                     "status": "ready",
                     **info,
                     "video_start_event_ms": self.video_start_ms,
                     "clock_uncertainty_ms": self.video_clock_uncertainty_ms,
+                    "audio_capture": self.audio_recorder.metadata() if self.audio_recorder else None,
                 }
                 review = await review_video(
                     self.evidence.root / "session.mp4",
                     self.evidence.root / "review.mp4",
-                    [{**e, "t_ms": max(0, e["t_ms"] - self.video_start_ms)} for e in self.evidence.events],
+                    relative_video_events(self.evidence.events, self.video_start_ms),
                     info["duration_seconds"],
                     self.config.video_max_bytes,
                 )
@@ -617,5 +653,6 @@ class BrowserRuntime:
                 and all(check_events(a, self.evidence.events) for a in checks),
                 "speech_content_verification_scope": "configured_keywords_only",
                 "playback_verified_by_human": False,
+                "recording": self.audio_recorder.metadata() if self.audio_recorder else None,
             },
         )

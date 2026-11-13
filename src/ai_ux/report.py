@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 
+from .media import audio_note
 from .replay import render_batch_replay
 
 
@@ -93,14 +94,19 @@ def render(root: Path, report: dict):
         ]
         if r.get("video", {}).get("status") == "ready":
             lines += [
-                f"[无声录屏]({r['run_id']}/session.mp4)，{r['video']['duration_seconds']:.1f} 秒，2 fps；用于视觉状态与流程审查，不能替代动作高速细节或声音验收。",
+                f"[完整录屏]({r['run_id']}/session.mp4)，{r['video']['duration_seconds']:.1f} 秒，2 fps。{audio_note(r['video'])}",
                 "",
             ]
         if r.get("video", {}).get("review"):
             lines += [
-                f"[Judge 使用的视频]({r['run_id']}/review.mp4) · [剪辑时间映射]({r['run_id']}/video-timeline.json)，问题中的视频时间点对应此精简版。",
+                f"[精简录屏]({r['run_id']}/review.mp4) · [剪辑时间映射]({r['run_id']}/video-timeline.json)，问题中的视频时间点对应此精简版。",
                 "",
             ]
+            if r["video"]["review"].get("model_path"):
+                lines += [
+                    f"[模型评审的无声副本]({r['run_id']}/{r['video']['review']['model_path']})：与带声精简版画面和时间线一致，音轨只供人工复核。",
+                    "",
+                ]
     lines += ["## 修改候选", ""]
     if not report["issues"]:
         lines += [
@@ -161,6 +167,9 @@ def render(root: Path, report: dict):
         if r.get("video", {}).get("status") == "ready":
             video_name = "review.mp4" if r.get("video", {}).get("review") else "session.mp4"
             body.append(f'<video controls preload="metadata" src="{rid}/{video_name}"></video>')
+            body.append(f"<p>{html.escape(audio_note(r['video']))}</p>")
+            if r["video"].get("audio_capture"):
+                body.append(f'<p><a href="{rid}/audio-capture.json">音频采集与同步证据</a></p>')
             if video_name == "review.mp4":
                 body.append(
                     f'<p>评审精简版；<a href="{rid}/session.mp4">原始完整视频</a> · <a href="{rid}/video-timeline.json">时间映射</a></p>'
