@@ -85,12 +85,12 @@ Each run writes an isolated directory under `artifacts/`. Outputs include:
 
 - `report.html`, `report.md`, `report.json`: outcomes, evidence-based issues, reproduction steps, suggested changes, and regression acceptance criteria.
 - `events.jsonl`, `observations/`, `screenshots/`: timestamped actions, visible UI, relevant errors, and browser evidence.
-- `session.mp4`: original silent recording. `review.mp4`: compact video with model-deliberation-only waits removed. `video-timeline.json`: explicit mapping to the original clock.
+- `session.mp4`: full recording. DuckKing runs capture authorized test-microphone input and actual page Web Audio output into its audio track. `review.mp4`: compact recording with synchronized audio/video cuts that retain audible intervals. `video-timeline.json`: explicit mapping to the original clock.
 - `verification.json`: deterministic checks independent of the Explorer's “done” response.
 - `source-map.json`: verified source-reference candidates; not proof of root cause or deployed-version equivalence.
 - `model-calls.json`, `manifest.json`: actual models, usage, failure/fallback outcomes, artifact hashes.
 
-GLM reviews the compact MP4 directly. MiniMax's compatibility path reads continuous 4-second native-video segments and synthesizes their observations; final-segment padding is recorded. Original recordings are retained. Video is 2 fps and silent: it cannot establish speaker audibility or fast-motion accuracy.
+For recordings with audio, `judge.mp4` is a picture-identical silent copy used only by the vision models; humans play the audible `review.mp4`. GLM reviews that silent model copy. MiniMax's compatibility path reads continuous 4-second native-video segments and synthesizes their observations; final-segment padding is recorded. Original recordings are retained. Video remains 2 fps. Digital browser audio is not a physical speaker recording and cannot establish hardware volume or fast-motion accuracy. Historical silent videos remain labeled silent; audio is not invented from transcripts or untimed response PCM. See [audio recording](docs/audio-recording.md).
 
 Retry only judgement after a provider outage:
 

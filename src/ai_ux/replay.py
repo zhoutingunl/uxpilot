@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from urllib.parse import quote
 
+from .media import audio_note
 from .policy import scrub
 
 STYLE = """.replay-controls{position:sticky;top:0;z-index:5;display:flex;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 3px 12px #0001}.replay-controls button,.replay-controls select{font:inherit;padding:6px 10px;border:1px solid #b8c8d8;background:white;border-radius:5px;cursor:pointer}#play{background:#286b94;color:white}#counter{margin-left:auto}.replay-current{outline:2px solid #286b94}.replay-future{opacity:.5}[hidden]{display:none!important}body{font:15px/1.65 system-ui;color:#233344;background:#f4f7fb;max-width:1180px;margin:30px auto;padding:0 20px}a{color:#286b94}h1{font-size:30px}header,section,article{background:white;padding:20px 24px;border:1px solid #dce5ee;border-radius:12px;margin:14px 0}summary{cursor:pointer;font-weight:600}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f8fb;padding:14px;border-radius:8px;font-size:12px}img,video{max-width:100%;max-height:480px}nav{display:flex;gap:18px;flex-wrap:wrap}.meta{color:#697a8c;font-size:13px}.error{border-left:4px solid #c75b44}.ok{border-left:4px solid #2b947a}.tag{font:12px monospace;background:#e8eff7;padding:4px 8px;border-radius:5px}.step{scroll-margin-top:15px}details+details{margin-top:12px}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:9px;border-bottom:1px solid #e5ebf1}"""
@@ -70,7 +71,7 @@ def render_replay(root: Path, run: dict | None = None):
             '<section><h2>浏览器回放</h2><video controls preload="metadata" src="review.mp4"></video><nav>'
             + link(root, "session.mp4", "原始完整视频")
             + link(root, "video-timeline.json", "精简视频时间映射")
-            + '</nav><p class="meta">无声录屏；产品耗时以事件和资源计时为准。</p></section>'
+            + f'</nav><p class="meta">{escape(audio_note(run.get("video", {})))} 产品耗时以事件和资源计时为准。</p></section>'
         )
     if events:
         body += '<section class="replay-controls"><button id="first" title="第一步">⏮</button><button id="prev" title="上一步">◀</button><button id="play">▶ 播放</button><button id="next" title="下一步">▶</button><button id="last" title="最后一步">⏭</button><label>筛选 <select id="filter"><option value="all">全部记录</option><option value="error">仅错误</option><option value="model_call">模型调用</option><option value="agent_action_start">浏览器操作</option><option value="observation">页面观察</option></select></label><span id="counter" aria-live="polite"></span></section><p class="meta">按记录逐步浏览；播放不会重新执行浏览器操作。</p>'

@@ -72,6 +72,8 @@ class Browser(StrictModel):
     locale: str = "zh-CN"
     action_timeout_ms: int = Field(default=7000, ge=1000, le=30000)
     video: bool = True
+    record_audio: bool = True
+    audio_max_bytes: int = Field(default=256_000_000, ge=100_000, le=512_000_000)
     video_max_seconds: int = Field(default=180, ge=5, le=600)
     video_max_bytes: int = Field(default=18_000_000, ge=1000, le=50_000_000)
     redact_selectors: list[str] = Field(default_factory=lambda: ["input[type=password]", "#activation"])
