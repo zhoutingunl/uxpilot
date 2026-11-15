@@ -110,6 +110,8 @@ def clone_failure(error):
         )
     ):
         return "filesystem", "无法写入检出目录，请检查磁盘空间和目录权限", False
+    if "operation too slow" in message:
+        return "low_speed_timeout", "Git HTTP 传输触发低速超时", True
     if any(
         s in message
         for s in (
@@ -153,6 +155,9 @@ def clone_repository(origin, root, ref, *, on_progress=None):
         "GIT_TERMINAL_PROMPT": "0",
         "GIT_LFS_SKIP_SMUDGE": "1",
         "GIT_SSH_COMMAND": "ssh -oBatchMode=yes",
+        # Do not inherit a host's aggressive (e.g. five-second) stall cutoff.
+        "GIT_HTTP_LOW_SPEED_LIMIT": "1000",
+        "GIT_HTTP_LOW_SPEED_TIME": "30",
     }
     for attempt in range(1, 3):
         transport = "HTTP/1.1" if attempt == 2 and origin.startswith("https://") else "default"
