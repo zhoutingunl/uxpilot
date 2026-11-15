@@ -87,7 +87,7 @@ def test_store_queue_limit_and_deploy_immutability(tmp_path):
 
 
 def test_statistics_separates_queue_execution_total_and_unknown_tokens(tmp_path):
-    now = time.time()
+    now = datetime(2026, 11, 4, 12, tzinfo=ZoneInfo("Asia/Shanghai")).timestamp()
     jobs = [
         {"created_at": now - 100, "started_at": now - 80, "finished_at": now - 20, "status": "completed"},
         {"created_at": now - 50, "started_at": None, "finished_at": None, "status": "queued"},
@@ -112,7 +112,7 @@ def test_statistics_separates_queue_execution_total_and_unknown_tokens(tmp_path)
             "total_tokens": None,
         },
     ]
-    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    today = datetime.fromtimestamp(now, ZoneInfo("Asia/Shanghai")).date()
     d = statistics(jobs, calls, today, today)
     assert d["submitted"] == 2
     assert (

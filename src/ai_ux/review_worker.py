@@ -29,6 +29,8 @@ async def execute_job(store, job, projects, reports, version):
             goals=[request.goals] if request.goals.strip() else [],
             task_count=request.tasks,
             adapter="duckking" if urlsplit(request.url).hostname == "duck.qbox.net" else "generic",
+            devices=request.devices,
+            coverage=request.coverage,
         )
         config.output_dir = str(reports)
         store.update(

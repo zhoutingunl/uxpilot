@@ -32,7 +32,7 @@ models:
       reasoning_split: true
       reasoning_effort: low
   validation_retries: 1
-  max_calls_per_run: 32
+  max_calls_per_run: 64
 speech:
   base_url: https://api.minimax.cn
   key_env: MINIMAX_CN_API_KEY
@@ -183,7 +183,46 @@ tasks:
     goal: 在手机上让小鸭点头，并评价操作时是否能同时看见小鸭的反应。
     max_steps: 10
     timeout_seconds: 360
-    browser: {channel: chrome, width: 390, height: 844, video: true, video_max_seconds: 600}
+    browser: {device: android, channel: chrome, width: 390, height: 844, video: true, video_max_seconds: 600}
     assertions:
       - {id: nod-complete, kind: action_completed, action_name: nod}
-      - {id: visible-controls, kind: viewport_overlap, selector: '#viewport', other_selector: '[data-action=nod]', required: false}
+      - {id: visible-controls, kind: viewport_overlap, selector: '#viewport', other_selector: '[data-action=nod]', required: true}
+    invariants:
+      - {id: mobile-no-overflow, kind: no_horizontal_overflow}
+      - {id: mobile-viewport, kind: mobile_viewport}
+      - {id: mobile-focused-input, kind: focused_input_visible}
+  - id: director-demo-recovery
+    start_path: /features.html
+    goal: 在同一房间验证四鸭导演运行中切到演示场景，以及返回停止任务后能否重新开播。
+    max_steps: 40
+    timeout_seconds: 1200
+    phases:
+      - id: director-running
+        role: setup
+        goal: 在场景目录找到四鸭导演（可能名为四鸭临场导演），准备并启动一次本地演出；确认正在执行后立即结束本阶段，不等待演出自然结束，不连接语音。
+        max_steps: 14
+        auto_advance: true
+        assertions:
+          - {id: director-selected, kind: text, selector: '#scene-title', contains: 导演}
+          - {id: director-running, kind: text, selector: '#task-status', contains: 正在执行}
+      - id: interrupt-and-play
+        role: transition
+        goal: 保持当前房间，直接点击演示场景导航，使用预录模式启动第一幕“你是哪只鸭？”，等到实际演出结束。不要先停止四鸭任务；若显示错误，记录后结束本阶段，留给后续恢复步骤处理。
+        max_steps: 8
+        assertions:
+          - {id: theatre-completed, kind: demo_completed}
+          - {id: no-feature-lock, kind: text_absent, selector: body, contains: 请使用当前功能场景}
+      - id: stop-original-task
+        role: recovery
+        goal: 返回原先四鸭导演页面，在同一房间点击“停止任务”并确认不再执行。不要点释放场景、重新准备，也不要换房间或清空存储。停止入口不可用时记录并结束本阶段。
+        max_steps: 8
+        assertions:
+          - {id: director-page, kind: text, selector: '#scene-title', contains: 导演}
+          - {id: stopped, kind: text, selector: '#task-status', contains: 任务已取消}
+      - id: retry-theatre
+        role: retry
+        goal: 再次从导航进入演示场景，在同一房间重新播放第一幕“你是哪只鸭？”。确认本次真实演出完成，不用先前成功或已点击开播按钮代替结果。
+        max_steps: 10
+        assertions:
+          - {id: theatre-restarted, kind: demo_completed}
+          - {id: no-feature-lock-after-stop, kind: text_absent, selector: body, contains: 请使用当前功能场景}

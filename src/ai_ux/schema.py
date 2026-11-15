@@ -64,6 +64,8 @@ class Models(StrictModel):
 
 
 class Browser(StrictModel):
+    device: Literal["desktop", "android", "iphone"] = "desktop"
+    engine: Literal["chromium", "webkit"] = "chromium"
     channel: str | None = "chrome"
     executable_path: str | None = None
     headless: bool = True
@@ -77,6 +79,35 @@ class Browser(StrictModel):
     video_max_seconds: int = Field(default=180, ge=5, le=600)
     video_max_bytes: int = Field(default=18_000_000, ge=1000, le=50_000_000)
     redact_selectors: list[str] = Field(default_factory=lambda: ["input[type=password]", "#activation"])
+
+    @model_validator(mode="after")
+    def mobile_profile(self):
+        if self.device != "desktop":
+            engine, width, height = (
+                ("webkit", 390, 664) if self.device == "iphone" else ("chromium", 412, 839)
+            )
+            if "engine" not in self.model_fields_set:
+                self.engine = engine
+            if self.engine != engine:
+                raise ValueError(f"{self.device} requires {engine}")
+            if "width" not in self.model_fields_set:
+                self.width = width
+            if "height" not in self.model_fields_set:
+                self.height = height
+        return self
+
+
+class EvaluationOptions(StrictModel):
+    devices: list[Literal["desktop", "android", "iphone"]] = Field(
+        default_factory=lambda: ["desktop"], min_length=1, max_length=3
+    )
+    coverage: Literal["standard", "stateful"] = "standard"
+
+    @model_validator(mode="after")
+    def unique_devices(self):
+        if len(set(self.devices)) != len(self.devices):
+            raise ValueError("devices must be unique")
+        return self
 
 
 class App(StrictModel):
@@ -118,6 +149,11 @@ class Assertion(StrictModel):
         "response_speech",
         "model_before_action",
         "viewport_overlap",
+        "text_absent",
+        "element_unobscured",
+        "focused_input_visible",
+        "mobile_viewport",
+        "demo_completed",
     ]
     selector: str | None = None
     contains: str | None = None
@@ -132,13 +168,23 @@ class Assertion(StrictModel):
     def required_fields(self):
         if self.kind == "action_completed" and not self.action_name:
             raise ValueError("action_completed requires action_name")
-        if self.kind in {"text", "viewport_overlap", "element_visible"} and not self.selector:
+        if (
+            self.kind in {"text", "text_absent", "viewport_overlap", "element_visible", "element_unobscured"}
+            and not self.selector
+        ):
             raise ValueError(f"{self.kind} requires selector")
         if self.kind == "viewport_overlap" and not self.other_selector:
             raise ValueError("viewport_overlap requires other_selector")
         if (
             self.kind
-            in {"text", "url_contains", "page_language", "voice_session_language", "response_speech"}
+            in {
+                "text",
+                "text_absent",
+                "url_contains",
+                "page_language",
+                "voice_session_language",
+                "response_speech",
+            }
             and not self.contains
         ):
             raise ValueError(f"{self.kind} requires contains")
@@ -166,6 +212,16 @@ class AudioFixture(StrictModel):
         return self
 
 
+class Phase(StrictModel):
+    id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,49}$")
+    goal: str = Field(min_length=4, max_length=1200)
+    role: Literal["setup", "transition", "recovery", "retry"] = "transition"
+    expected_outcome: str | None = None
+    max_steps: int = Field(default=6, ge=1, le=20)
+    assertions: list[Assertion] = Field(default_factory=list)
+    auto_advance: bool = False
+
+
 class Task(StrictModel):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,79}$")
     goal: str
@@ -180,6 +236,21 @@ class Task(StrictModel):
     assertions: list[Assertion] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     expected_outcome: str | None = None
+    scenario_id: str | None = None
+    phases: list[Phase] = Field(default_factory=list, max_length=6)
+    invariants: list[Assertion] = Field(default_factory=list, max_length=12)
+
+    @model_validator(mode="after")
+    def unique_phases(self):
+        if len({p.id for p in self.phases}) != len(self.phases):
+            raise ValueError("phase ids must be unique within a task")
+        for phase in self.phases:
+            if phase.auto_advance and not any(
+                a.required and a.scope == "task" and a.kind in {"text", "action_completed", "demo_completed"}
+                for a in phase.assertions
+            ):
+                raise ValueError("auto_advance requires a positive business assertion")
+        return self
 
     def public(self):
         """Private selectors, assertions and source path must not reach Explorer."""
@@ -207,6 +278,7 @@ class Config(StrictModel):
     browser: Browser = Field(default_factory=Browser)
     speech: Speech | None = None
     ux_review: UXReview = Field(default_factory=UXReview)
+    coverage_limitations: list[str] = Field(default_factory=list, max_length=12)
     output_dir: str = "artifacts/agent"
     tasks: list[Task]
 
@@ -256,7 +328,20 @@ def load_config(path: Path) -> Config:
 
 
 class Action(StrictModel):
-    kind: Literal["click", "fill", "select", "press", "scroll", "wait", "speak", "navigate", "reload", "done"]
+    kind: Literal[
+        "click",
+        "fill",
+        "select",
+        "press",
+        "scroll",
+        "wait",
+        "speak",
+        "navigate",
+        "reload",
+        "back",
+        "rotate",
+        "done",
+    ]
     target: str | None = None
     text: str | None = Field(default=None, max_length=2000)
     key: str | None = None
@@ -338,6 +423,13 @@ class UXSuggestion(StrictModel):
     status: Literal["needs_review"] = "needs_review"
 
 
+class PhaseAssessment(StrictModel):
+    phase_id: str
+    outcome: Literal["passed", "failed", "blocked", "inconclusive"]
+    observations: list[str] = Field(min_length=1, max_length=3)
+    evidence_refs: list[str] = Field(min_length=1, max_length=8)
+
+
 class Judgement(StrictModel):
     summary: str
     task_assessment: Literal["passed", "partial", "failed", "inconclusive"]
@@ -346,3 +438,4 @@ class Judgement(StrictModel):
     ux_suggestions: list[UXSuggestion] = Field(default_factory=list, max_length=5)
     limitations: list[str] = Field(default_factory=list, max_length=12)
     video_observations: list[str] = Field(default_factory=list, max_length=12)
+    phase_assessments: list[PhaseAssessment] = Field(default_factory=list, max_length=6)

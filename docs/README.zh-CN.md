@@ -61,6 +61,30 @@ uv run uxpilot --config artifacts/projects/<id>/project.yaml \
 
 ## 如何解读结果
 
+工作台现在默认选择**桌面 + Android 触屏模拟**，策略为**正常流程 + 中途切换、恢复与重试**。每个体验目标会在每个选中设备上独立执行；例如 2 个目标、2 个设备产生 4 次运行。设备之间独立，同一次连续流程的各阶段共享浏览器、Cookie、存储和本次房间。仅在目标里写“手机”不替代设备选择。
+
+连续流程分为 `setup`、`transition`、`recovery`、`retry`：先建立运行中状态，再切页或打断，再尝试可见的停止/返回入口，最后重试目标。每阶段分别保存观察与验收，恢复成功不会覆盖首次失败；准备失败时依赖它的切换阶段会标为受阻，恢复阶段仍可尝试。阶段总计受任务步数和时限约束，未执行或预算耗尽会明确标为覆盖不完整。没有配置业务断言时，独立验收仍为 `not_verified`，模型逐阶段复核单独展示。规划依据不足时，报告首页会显示缺失的请求覆盖；状态链回归不等于穷尽全站所有页面和状态组合。
+
+新增证据包括 `browser-environment.json`、`phase-results.json`、`phases/` 和 `invariant-checks.json`。手机运行会逐步检查布局视口是否被当作桌面缩放、横向溢出以及已聚焦输入框的遮挡，过程中出现的失败不会被最后恢复的页面覆盖。Android 使用触屏点击、滑动和按住操作；iPhone 模式使用 WebKit，无可用引擎时记录执行/覆盖失败，不降级成桌面冒充通过。工作台会禁用尚未安装的 WebKit 选项。
+
+```bash
+# 通用连续流程，默认也是这组设备与策略
+uv run uxpilot review --repo /path/to/project --url https://demo.example.com/ \
+  --device desktop --device android --coverage stateful --max-steps 24 --timeout 600
+
+# 只测普通桌面流程
+uv run uxpilot review --repo /path/to/project --url https://demo.example.com/ \
+  --device desktop --coverage standard
+
+# DuckKing：同房间四鸭导演运行中切到演示场景，再停止并重试
+uv run uxpilot --config configs/duckking.yaml eval --task director-demo-recovery \
+  --device desktop --device android
+```
+
+DuckKing 用例要求本阶段产生新的预录演出完成证据，不以旧记录、按钮点击或 HTTP 200 代替完成。不会通过换房间、清空存储或后台偷偷释放来恢复。`mobile-nod` 现在也使用 Android 触屏模拟，并把控件与画面同屏作为必需检查。`check-locales --viewport mobile` 同样升级为 Android 触屏配置。
+
+**手机模拟仍不是真机验收。** 系统软键盘、动态地址栏、安全区、真实权限和硬件性能需要真机补验；横竖屏目前改变模拟视口，不代表物理旋转。WebKit 采用程序滚动，麦克风样本输入目前仅支持 Chromium；部分 WebKit 构建虽能产生触摸事件，`navigator.maxTouchPoints` 仍为 0，报告会保留实际值与限制。已有 API 请求不传 `devices`/`coverage` 时继续使用桌面/普通流程；新表单会明确提交选择。
+
 报告保存 `report.html`、`report.md`、`report.json`，包含实际观察、推断、建议、证据、复现步骤和回归标准。源码定位在体验结束后进行，并验证文件、行号和引用原文；这只说明位置相关，不代表根因或部署版本已经确认。
 
 自动任务有页面加载、JS 错误和横向溢出的基础检查。**没有业务断言时，业务独立验收显示 `not_verified`；不会因为网页能打开就宣布任务成功。** Judge 对业务是否完成的判断单独展示。可配置 `text`、`element_visible`、`url_contains` 等断言，或加入专用适配器。

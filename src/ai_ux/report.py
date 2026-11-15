@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from .media import audio_note
-from .replay import render_batch_replay, render_suggestions
+from .replay import render_batch_replay, render_journey, render_suggestions
 
 
 def aggregate(runs: list[dict]):
@@ -60,6 +60,9 @@ def render(root: Path, report: dict):
             f"源码版本：{report['repository'].get('commit') or '非 Git 目录'}；工作区修改：{report['repository'].get('dirty')}。源码与部署版本关系未知。",
             "",
         ]
+    if report.get("coverage_limitations"):
+        lines += ["", "## 未完成的请求覆盖", ""]
+        lines += [f"- {limitation}" for limitation in report["coverage_limitations"]]
     lines += ["", "## 任务观察", ""]
     for r in report["runs"]:
         lines += [
@@ -73,6 +76,38 @@ def render(root: Path, report: dict):
         coverage = r.get("verification", {}).get("coverage_note")
         if coverage:
             lines += [coverage, ""]
+        if r.get("browser"):
+            environment = r["browser"]
+            lines += [
+                f"设备：{environment.get('device')} · 引擎：{environment.get('engine')}；真机验证：未执行。",
+                "",
+            ]
+            lines += [f"- {s}" for s in environment.get("limitations", [])] + [""]
+        if r.get("phase_results"):
+            lines += [
+                "#### 连续流程与恢复验收",
+                "",
+                "同一会话连续执行；后续成功不覆盖先前失败。",
+                "",
+                "| 阶段 | 目标 | 执行 | 独立验收 |",
+                "|---|---|---|---|",
+            ]
+            for phase in r["phase_results"]:
+                lines += [
+                    f"| {phase['id']} | {phase['goal']} | {phase['status']} | {phase['verification']['task_outcome']} |"
+                ]
+            lines += [
+                "",
+                f"恢复与重试独立验收：{r.get('verification', {}).get('recovery_outcome', '未配置')}。",
+                "",
+            ]
+        if r.get("invariant_checks"):
+            checks = r["invariant_checks"]
+            failures = sum(c["required"] and c["status"] != "passed" for c in checks)
+            lines += [
+                f"[逐步检查]({r['run_id']}/invariant-checks.json)：{len(checks)} 次，必需检查失败 {failures} 次。",
+                "",
+            ]
         if r.get("judgement"):
             lines += [r["judgement"]["summary"], ""]
             lines += [f"- 限制：{s}" for s in r["judgement"]["limitations"]]
@@ -200,6 +235,10 @@ def render(root: Path, report: dict):
     replay_href = report.get("analysis_replay_url") or "analysis-replay.html"
     body.append(f'<p><a href="{html.escape(replay_href, quote=True)}">分析回放 · 人工审核过程</a></p>')
     body.append('<p><a href="report.md">Markdown 报告</a> · <a href="report.json">JSON 报告</a></p>')
+    if report.get("coverage_limitations"):
+        body.append("<section><h2>未完成的请求覆盖</h2>")
+        body.extend(f"<p>{html.escape(item)}</p>" for item in report["coverage_limitations"])
+        body.append("</section>")
     for r in report["runs"]:
         rid = html.escape(r["run_id"], quote=True)
         body.append(
@@ -226,6 +265,7 @@ def render(root: Path, report: dict):
         body.append(
             f'<p><a href="{rid}/replay.html">分析回放</a> · <a href="{rid}/run.json">运行证据</a> · <a href="{rid}/verification.json">验收</a></p></section>'
         )
+        body.append(render_journey(r, r["run_id"] + "/"))
         body.append(render_suggestions(r.get("judgement") or {}, r["run_id"] + "/"))
     for i in report["issues"]:
         body.append(

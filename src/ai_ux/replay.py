@@ -82,6 +82,38 @@ def render_suggestions(judgement: dict, prefix: str = "") -> str:
     return body
 
 
+def render_journey(run: dict, prefix: str = "") -> str:
+    environment = run.get("browser") or {}
+    phases = run.get("phase_results") or []
+    checks = run.get("invariant_checks") or []
+    if not environment and not phases:
+        return ""
+    from .devices import PROFILES
+
+    label = PROFILES.get(environment.get("device"), {}).get("label", environment.get("device", "未记录"))
+    viewport = environment.get("viewport") or {}
+    body = f"<section><h2>设备与连续流程验收</h2><p>{escape(label)} · {escape(environment.get('engine', ''))} · {escape(viewport.get('width', '?'))}×{escape(viewport.get('height', '?'))}</p>"
+    for limitation in environment.get("limitations", []):
+        body += f'<p class="meta">{escape(limitation)}</p>'
+    if phases:
+        assessments = {
+            p["phase_id"]: p["outcome"] for p in (run.get("judgement") or {}).get("phase_assessments", [])
+        }
+        body += "<p>同一会话连续执行；首次失败与恢复结果分别保留。</p><table><tr><th>阶段 / 目标</th><th>执行</th><th>独立验收</th><th>模型复核</th></tr>"
+        for phase in phases:
+            ref = quote(prefix + f"phases/{phase['id']}.json", safe="/-._")
+            body += f'<tr><td><a href="{ref}">{escape(phase["id"])}</a><br>{escape(phase["goal"])}</td><td>{escape(phase["status"])}</td><td>{escape(phase["verification"]["task_outcome"])}</td><td>{escape(assessments.get(phase["id"], "未复核"))}</td></tr>'
+        body += "</table>"
+        recovery = run.get("verification", {}).get("recovery_outcome")
+        if recovery:
+            body += f"<p>恢复与重试独立验收：{escape(recovery)}</p>"
+    if checks:
+        failures = [c for c in checks if c["required"] and c["status"] != "passed"]
+        ref = quote(prefix + "invariant-checks.json", safe="/-._")
+        body += f'<p><a href="{ref}">逐步检查记录</a>：{len(checks)} 次，必需检查失败 {len(failures)} 次。中途失败不会被末尾恢复覆盖。</p>'
+    return body + "</section>"
+
+
 def render_replay(root: Path, run: dict | None = None):
     run = run or read_json(root / "run.json", {})
     events = (
@@ -96,6 +128,7 @@ def render_replay(root: Path, run: dict | None = None):
         if value is not None:
             body += details(label, value)
     body += "</section>"
+    body += render_journey(run)
     body += render_suggestions(run.get("judgement") or read_json(root / "judgement.json", {}))
     if (root / "review.mp4").is_file():
         body += (

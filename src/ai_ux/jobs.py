@@ -16,19 +16,19 @@ from .defaults import default_models
 from .evidence import EVENT_SINK
 from .policy import scrub
 from .repository import validate_git_url
-from .schema import Browser, StrictModel
+from .schema import Browser, EvaluationOptions
 from .store import Store
 
 
-class JobRequest(StrictModel):
+class JobRequest(EvaluationOptions):
     repo: str = Field(min_length=1, max_length=1000)
     url: str = Field(min_length=1, max_length=2000)
     ref: str = Field(default="", max_length=150, pattern=r"^([A-Za-z0-9_./][A-Za-z0-9_./-]*)?$")
     goal: str = Field(default="", max_length=1500)
     tasks: int = Field(default=2, ge=1, le=5)
     repeats: int = Field(default=1, ge=1, le=3)
-    max_steps: int = Field(default=12, ge=1, le=30)
-    timeout: int = Field(default=300, ge=30, le=600)
+    max_steps: int = Field(default=12, ge=1, le=40)
+    timeout: int = Field(default=300, ge=30, le=1800)
 
 
 def public_host(host):
@@ -172,6 +172,8 @@ class JobManager:
             browser=Browser(video_max_seconds=600),
             allowed_hosts=[urlsplit(request.url).hostname],
             resource_hosts=[],
+            devices=request.devices,
+            coverage=request.coverage,
         )
         self.store.stage(job["id"], "evaluating")
         batch, report = await evaluate(
@@ -188,7 +190,7 @@ class JobManager:
         path = str((batch / "report.html").relative_to(root))
         failed = any(
             r.get("judge_status") != "completed"
-            or r.get("stop_reason") in {"runtime_error", "task_timeout", "interrupted"}
+            or r.get("stop_reason") in {"runtime_error", "task_timeout", "interrupted", "journey_incomplete"}
             for r in report["runs"]
         )
         return {

@@ -43,8 +43,10 @@ class BrowserRuntime:
         self.app, self.config, self.task, self.evidence = app, config, task, evidence
         self.policy = Policy(app)
         self.playwright = self.browser = self.context = self.page = None
+        self.touch_session = None
         self.nodes = {}
         self.observed_links: set[str] = set()
+        self.visited_urls: set[str] = set()
         self.owned_room = None
         self.action_ids = set()
         self.initial_states_seen: set[str] = set()
@@ -69,6 +71,10 @@ class BrowserRuntime:
 
     async def start(self):
         self.playwright = await async_playwright().start()
+        if self.config.engine == "webkit" and self.task.audio:
+            raise ValueError(
+                "WebKit microphone fixtures are not supported; use Chromium or a physical-device audio test"
+            )
         args = []
         if self.task.audio:
             args = [
@@ -77,18 +83,28 @@ class BrowserRuntime:
                 f"--use-file-for-fake-audio-capture={self.task.audio.path}",
             ]
         options = {"headless": self.config.headless, "args": args}
-        executable = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE") or self.config.executable_path
+        executable = (
+            (os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE") or self.config.executable_path)
+            if self.config.engine == "chromium"
+            else None
+        )
         if executable:
             options["executable_path"] = executable
-        elif self.config.channel:
+        elif self.config.channel and self.config.engine == "chromium":
             options["channel"] = self.config.channel
-        self.browser = await self.playwright.chromium.launch(**options)
+        self.browser = await getattr(self.playwright, self.config.engine).launch(**options)
         kwargs = {
             "viewport": {"width": self.config.width, "height": self.config.height},
             "locale": self.config.locale,
             "service_workers": "block",
             "permissions": ["microphone"] if self.task.audio else [],
         }
+        if self.config.device != "desktop":
+            from .devices import PROFILES
+
+            preset = dict(self.playwright.devices[PROFILES[self.config.device]["preset"]])
+            preset.pop("default_browser_type", None)
+            kwargs = {**preset, **kwargs}
         if self.config.video:
             kwargs.update(
                 record_video_dir=str(self.evidence.root / "raw-video"),
@@ -119,6 +135,15 @@ class BrowserRuntime:
         )
         if self.app.adapter == "duckking":
             await self.context.expose_binding("__uxMark", self._mark)
+            await self.context.expose_binding(
+                "__uxDemoMark",
+                lambda source, data: self.evidence.event(
+                    "demo_result", data={k: data.get(k) for k in ("scene", "mode", "status")}
+                ),
+            )
+            await self.context.add_init_script(
+                script="""(()=>{let previous='';const sample=()=>{const node=document.querySelector('#theatre-result');if(!node||node.textContent===previous)return;previous=node.textContent;try{const proof=JSON.parse(previous);window.__uxDemoMark({scene:proof.scene,mode:proof.mode,status:proof.status}).catch(()=>{})}catch{}};new MutationObserver(sample).observe(document,{childList:true,subtree:true,characterData:true});})()"""
+            )
             await self.context.add_init_script(
                 script="""(() => {
           let previous='';setInterval(()=>{const e=document.querySelector('#viewport'),p=document.querySelector('#physics-viewport');
@@ -131,6 +156,42 @@ class BrowserRuntime:
         if self.audio_recorder:
             self.audio_recorder.start_offset_ms = self.video_start_ms
         self.page = await self.context.new_page()
+        self.touch_session = (
+            await self.context.new_cdp_session(self.page)
+            if self.config.device != "desktop" and self.config.engine == "chromium"
+            else None
+        )
+        self.environment = {
+            "device": self.config.device,
+            "engine": self.config.engine,
+            "viewport": kwargs["viewport"],
+            "has_touch": kwargs.get("has_touch", False),
+            "is_mobile": kwargs.get("is_mobile", False),
+            "device_scale_factor": kwargs.get("device_scale_factor", 1),
+            "user_agent": await self.page.evaluate("navigator.userAgent"),
+            "navigator_max_touch_points": await self.page.evaluate("navigator.maxTouchPoints"),
+            "scroll_input": "touch"
+            if self.touch_session
+            else "programmatic"
+            if self.config.device != "desktop"
+            else "wheel",
+            "physical_device": False,
+            "limitations": (
+                ["浏览器设备模拟，未进行真机验证；系统软键盘、动态地址栏、安全区和硬件性能仍需真机复核。"]
+                + (
+                    ["WebKit 滚动采用程序滚动，未验证真实滑动手势。"]
+                    if self.config.engine == "webkit"
+                    else []
+                )
+            )
+            if self.config.device != "desktop"
+            else [],
+        }
+        if self.config.device != "desktop" and not self.environment["navigator_max_touch_points"]:
+            self.environment["limitations"].append(
+                "此模拟引擎 navigator.maxTouchPoints 为 0；触屏点击事件已启用，该能力属性与真机可能不同。"
+            )
+        self.evidence.write("browser-environment.json", self.environment)
         if self.audio_recorder:
             self.audio_recorder.page = self.page
         self.video_clock_uncertainty_ms = self.evidence.ms() - self.video_start_ms
@@ -324,6 +385,9 @@ class BrowserRuntime:
             self.evidence.event("voice_event", direction=direction, data=fields)
 
     async def observe(self, step: int):
+        # Touch navigation can commit a new document before its body exists.
+        await self.page.wait_for_load_state("domcontentloaded", timeout=30000)
+        await self.page.locator("body").wait_for(state="attached", timeout=10000)
         # Clear stale handles before constructing the current observation.
         await self.page.locator("[data-ux-id]").evaluate_all(
             "es=>es.forEach(e=>e.removeAttribute('data-ux-id'))"
@@ -345,6 +409,7 @@ class BrowserRuntime:
             if node.get("href"):
                 node["href"] = safe_url(node["href"])
         result["url"] = safe_url(result["url"])
+        self.visited_urls.add(result["url"])
         result["step"] = step
         result["t_ms"] = self.evidence.ms()
         result["screenshot"] = f"screenshots/step-{step:03}.png"
@@ -381,9 +446,10 @@ class BrowserRuntime:
             if action.kind == "click":
                 # Follow an observed same-origin link in the owned tab; no orphan tabs/worlds.
                 if node.get("href"):
-                    await self.page.goto(
-                        self.policy.check_url(node["href"]), wait_until="domcontentloaded", timeout=30000
-                    )
+                    self.policy.check_url(node["href"])
+                    await locator.evaluate("e=>{if(e.target==='_blank')e.target='_self'}")
+                if self.config.device != "desktop":
+                    await locator.tap()
                 else:
                     await locator.click()
             elif action.kind == "fill":
@@ -400,7 +466,37 @@ class BrowserRuntime:
                     self.policy.check_control(focused)
                 await self.page.keyboard.press(action.key)
             elif action.kind == "scroll":
-                await self.page.mouse.wheel(0, action.pixels * (1 if action.direction == "down" else -1))
+                if self.config.device != "desktop" and self.touch_session:
+                    size = self.page.viewport_size
+                    x, start = (
+                        size["width"] / 2,
+                        size["height"] * (0.8 if action.direction == "down" else 0.2),
+                    )
+                    delta = min(action.pixels, size["height"] * 0.6) * (
+                        -1 if action.direction == "down" else 1
+                    )
+                    await self.touch_session.send(
+                        "Input.dispatchTouchEvent",
+                        {"type": "touchStart", "touchPoints": [{"x": x, "y": start}]},
+                    )
+                    try:
+                        for i in range(1, 7):
+                            await self.touch_session.send(
+                                "Input.dispatchTouchEvent",
+                                {"type": "touchMove", "touchPoints": [{"x": x, "y": start + delta * i / 6}]},
+                            )
+                            await self.page.wait_for_timeout(25)
+                    finally:
+                        await self.touch_session.send(
+                            "Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []}
+                        )
+                elif self.config.device != "desktop":
+                    await self.page.evaluate(
+                        "pixels=>scrollBy(0,pixels)",
+                        action.pixels * (1 if action.direction == "down" else -1),
+                    )
+                else:
+                    await self.page.mouse.wheel(0, action.pixels * (1 if action.direction == "down" else -1))
             elif action.kind == "wait":
                 await self.page.wait_for_timeout(action.seconds * 1000)
             elif action.kind == "speak":
@@ -423,28 +519,53 @@ class BrowserRuntime:
                 self.audio_signal_seen = False
                 self.response_turn_start = self.response_audio_bytes
                 self.response_turn_rates.clear()
-                await self.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+                if not self.touch_session:
+                    await self.page.mouse.move(x, y)
                 self.evidence.event(
                     "audio_input_start", transcript=audio.transcript, input_kind=audio.input_kind
                 )
                 if self.audio_recorder:
                     await self.audio_recorder.begin_input()
                 try:
-                    await self.page.mouse.down()
+                    if self.touch_session:
+                        await self.touch_session.send(
+                            "Input.dispatchTouchEvent",
+                            {"type": "touchStart", "touchPoints": [{"x": x, "y": y}]},
+                        )
+                    else:
+                        await self.page.mouse.down()
                     await self.page.wait_for_timeout(audio.hold_ms)
                 finally:
                     try:
-                        await self.page.mouse.up()
+                        if self.touch_session:
+                            await self.touch_session.send(
+                                "Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []}
+                            )
+                        else:
+                            await self.page.mouse.up()
                     finally:
                         if self.audio_recorder:
                             await self.audio_recorder.end_input()
                         self.evidence.event("audio_input_end")
             elif action.kind == "reload":
                 await self.page.reload(wait_until="domcontentloaded", timeout=30000)
+            elif action.kind == "back":
+                if await self.page.evaluate("history.length") <= 1:
+                    raise ValueError("no observed previous page to return to")
+                await self.page.go_back(wait_until="domcontentloaded", timeout=30000)
+            elif action.kind == "rotate":
+                if self.config.device == "desktop":
+                    raise ValueError("rotation requires a mobile profile")
+                size = self.page.viewport_size
+                await self.page.set_viewport_size({"width": size["height"], "height": size["width"]})
+                self.evidence.event(
+                    "viewport_rotated", viewport=self.page.viewport_size, physical_rotation=False
+                )
             elif action.kind == "navigate":
                 url = self.policy.check_url(action.url)
-                if url not in self.observed_links:
-                    raise ValueError("navigate URL must appear in the latest observation")
+                if url not in self.observed_links and url not in self.visited_urls:
+                    raise ValueError("navigate URL must be an observed link or a page visited in this run")
                 await self.page.goto(url, wait_until="domcontentloaded", timeout=30000)
             await self.page.wait_for_timeout(250)
             return {"ok": True, "duration_ms": self.evidence.ms() - began}
@@ -467,6 +588,10 @@ class BrowserRuntime:
             return not any(e["kind"] == "pageerror" for e in self.evidence.events)
         if assertion.kind == "no_horizontal_overflow":
             return await self.page.evaluate("()=>document.documentElement.scrollWidth<=innerWidth+1")
+        if assertion.kind == "mobile_viewport":
+            return await self.page.evaluate(
+                "expected=>Math.abs(innerWidth-expected)<=2", self.page.viewport_size["width"]
+            )
         if assertion.kind == "element_visible":
             return await self.page.locator(assertion.selector).is_visible()
         if assertion.kind == "url_contains":
@@ -478,6 +603,23 @@ class BrowserRuntime:
         if assertion.kind == "text":
             locator = self.page.locator(assertion.selector)
             return await locator.is_visible() and assertion.contains in (await locator.inner_text())
+        if assertion.kind == "text_absent":
+            locator = self.page.locator(assertion.selector)
+            return await locator.is_visible() and assertion.contains not in (await locator.inner_text())
+        if assertion.kind == "demo_completed":
+            if self.app.adapter != "duckking":
+                raise ValueError("demo_completed requires the duckking adapter")
+            return await self.page.evaluate(
+                """() => {try{const data=JSON.parse(document.querySelector('#theatre-result')?.textContent||'null');return data?.status==='completed'&&data?.mode==='scripted_rehearsal'}catch{return false}}"""
+            )
+        if assertion.kind == "element_unobscured":
+            return await self.page.locator(assertion.selector).evaluate(
+                """e=>{const r=e.getBoundingClientRect();const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.width>0&&r.height>0&&!!hit&&(hit===e||e.contains(hit))}"""
+            )
+        if assertion.kind == "focused_input_visible":
+            return await self.page.evaluate(
+                """()=>{const e=document.activeElement;if(!e||!e.matches('input,textarea,[contenteditable=true]'))return true;const r=e.getBoundingClientRect(),v=visualViewport;const left=v?.offsetLeft??0,top=v?.offsetTop??0;const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return r.top>=top&&r.bottom<=top+(v?.height??innerHeight)&&r.left>=left&&r.right<=left+(v?.width??innerWidth)&&!!hit&&(hit===e||e.contains(hit))}"""
+            )
         if assertion.kind == "model_ready":
             if self.app.adapter != "duckking":
                 raise ValueError("model_ready requires the duckking adapter")

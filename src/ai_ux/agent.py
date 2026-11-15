@@ -12,12 +12,13 @@ import httpx
 
 from .browser import BrowserRuntime
 from .evidence import Evidence
+from .journey import combine_verification, explore
 from .llm import LLM, LLMError
 from .media import relative_video_events, review_video, silent_model_video, split_review_video
 from .replay import render_replay
 from .report import aggregate, render
 from .repository import Repository, prepare_repository
-from .schema import Action, Config, Judgement, StrictModel, Task, UXReview
+from .schema import Config, Judgement, StrictModel, Task, UXReview
 from .source_map import locate_sources
 from .speech import SpeechClient
 from .ux_review import review_context, validate_suggestions
@@ -56,7 +57,7 @@ async def judge_run(llm, evidence, task, verification, video_info, execution_sta
         for p in evidence.root.rglob("*")
         if p.is_file()
         and (
-            p.parent.name in {"screenshots", "observations"}
+            p.parent.name in {"screenshots", "observations", "phases"}
             or (
                 p.parent == evidence.root
                 and p.name
@@ -72,6 +73,9 @@ async def judge_run(llm, evidence, task, verification, video_info, execution_sta
                     "review.mp4",
                     "judge.mp4",
                     "video-timeline.json",
+                    "phase-results.json",
+                    "invariant-checks.json",
+                    "browser-environment.json",
                 }
             )
         )
@@ -105,6 +109,11 @@ async def judge_run(llm, evidence, task, verification, video_info, execution_sta
         "verification": verification,
         "execution_status": execution_status,
         "ux_review": context,
+        "phase_results": verification.get("phases", []),
+        "invariant_checks": verification.get("invariant_checks", []),
+        "test_environment": json.loads((evidence.root / "browser-environment.json").read_text())
+        if (evidence.root / "browser-environment.json").is_file()
+        else None,
         "observations": observations[-8:],
         "timeline": timeline,
         "evidence_refs": references,
@@ -225,6 +234,37 @@ async def judge_run(llm, evidence, task, verification, video_info, execution_sta
         except ValueError:
             rejected.append({"title": issue.title, "reason": "missing_or_nonconcrete_evidence"})
     judge.issues = valid
+    expected_phases = {p.id for p in task.phases}
+    assessed = set()
+    valid_assessments = []
+    for assessment in judge.phase_assessments:
+        try:
+            if assessment.phase_id not in expected_phases or assessment.phase_id in assessed:
+                raise ValueError("unknown or duplicate phase")
+            for ref in assessment.evidence_refs:
+                if ref not in references:
+                    raise ValueError("unsupplied evidence")
+                evidence.resolve(ref)
+            if not any(
+                ref.endswith((".png", ".jsonl")) or ref.startswith("observations/")
+                for ref in assessment.evidence_refs
+            ):
+                raise ValueError("concrete evidence required")
+            assessed.add(assessment.phase_id)
+            valid_assessments.append(assessment)
+        except ValueError:
+            rejected.append({"title": assessment.phase_id, "reason": "invalid_phase_assessment"})
+    judge.phase_assessments = valid_assessments
+    if expected_phases - assessed:
+        judge.limitations = [
+            "模型未完成所有阶段的有效复核；以逐阶段独立验收与证据记录为准。",
+            *judge.limitations,
+        ][:12]
+    if (payload.get("test_environment") or {}).get("is_mobile"):
+        judge.limitations = [
+            "本次为手机浏览器模拟，未验证真实手机、系统软键盘、动态地址栏或硬件性能。",
+            *judge.limitations,
+        ][:12]
     rejected_suggestions = validate_suggestions(judge, context, evidence, references, video_info)
     evidence.write("judge-rejected.json", rejected)
     evidence.write("ux-suggestions-rejected.json", rejected_suggestions)
@@ -255,7 +295,7 @@ async def run_task(
         "prompt_hashes": {n: hashlib.sha256(prompt(n).encode()).hexdigest() for n in ["explorer", "judge"]},
     }
     evidence.write("task.json", task.model_dump())
-    history = []
+    phase_results, invariant_checks = [], []
     verification = {"task_outcome": "not_verified", "checks": []}
     if config.app.adapter == "duckking":
         try:
@@ -272,49 +312,19 @@ async def run_task(
                 evidence.write("task.json", task.model_dump())
             evidence.event("stage", stage="browser", status="running")
             await runtime.start()
-            for step in range(task.max_steps):
-                observation = await runtime.observe(step)
-                data = {
-                    "task": task.public(),
-                    "policy": (
-                        "Only use the room allocated to this run. Do not create or switch rooms; if capacity is full, stop and report the blocker."
-                        if config.app.adapter == "duckking"
-                        else "Operate only within the authorized demo. Do not publish, pay, send external messages, or delete persistent data; stop at login or permission barriers."
-                    ),
-                    "observation": observation,
-                    "recent_actions": history[-7:],
-                    "remaining_steps": task.max_steps - step,
-                }
-                log(f"[{run_id}] step {step + 1}/{task.max_steps}: observing", flush=True)
-                decision, call = await llm.structured(
-                    prompt("explorer"),
-                    json.dumps(data, ensure_ascii=False),
-                    Action,
-                    images=[evidence.resolve(observation["screenshot"])],
-                    purpose="explore",
-                )
-                evidence.write(
-                    f"decisions/step-{step:03}.json", {"action": decision.model_dump(), "model": call}
-                )
-                log(f"[{run_id}] {decision.kind} {decision.target or ''}: {decision.rationale}", flush=True)
-                if decision.kind == "done":
-                    result["stop_reason"] = "explorer_done"
-                    break
-                response = await runtime.perform(decision)
-                evidence.event(
-                    "agent_action_result",
-                    step=step,
-                    action_kind=decision.kind,
-                    target=decision.target,
-                    **response,
-                )
-                history.append({"action": decision.model_dump(), "result": response})
-                if len(history) >= 3 and all(not h["result"]["ok"] for h in history[-3:]):
-                    result["stop_reason"] = "consecutive_action_errors"
-                    break
-            else:
-                result["stop_reason"] = "step_limit"
-            await runtime.observe(len(evidence.observations))
+            result["stop_reason"] = await explore(
+                llm,
+                runtime,
+                task,
+                evidence,
+                prompt("explorer"),
+                "Only use the room allocated to this run. Do not create or switch rooms; stop at capacity limits."
+                if config.app.adapter == "duckking"
+                else "Operate only within the authorized demo. Do not publish, pay, send messages, or delete persistent data; stop at login barriers.",
+                phases=phase_results,
+                invariants=invariant_checks,
+                log=log,
+            )
     except asyncio.CancelledError:
         result["stop_reason"] = "interrupted"
         result["error"] = "interrupted; browser evidence retained"
@@ -326,6 +336,27 @@ async def run_task(
         result["error"] = str(e)[:1000]
         evidence.event("stage_error", stage="browser", error=result["error"])
     finally:
+        for phase in phase_results:
+            if phase["status"] == "running":
+                phase.update(status=result["stop_reason"], ended_ms=evidence.ms())
+                evidence.write(f"phases/{phase['id']}.json", phase)
+        if task.phases:
+            seen = {phase["id"] for phase in phase_results}
+            for phase in task.phases:
+                if phase.id not in seen:
+                    phase_results.append(
+                        {
+                            "id": phase.id,
+                            "role": phase.role,
+                            "goal": phase.goal,
+                            "expected_outcome": phase.expected_outcome,
+                            "status": "blocked",
+                            "reason": result["stop_reason"],
+                            "verification": {"task_outcome": "not_verified", "checks": []},
+                            "observations": [],
+                        }
+                    )
+            evidence.write("phase-results.json", phase_results)
         if runtime.page and not runtime.page.is_closed():
             if speech and config.speech.transcribe_responses and result["stop_reason"] != "interrupted":
                 try:
@@ -345,6 +376,15 @@ async def run_task(
             await runtime.finish()
         except Exception as e:
             evidence.event("cleanup_error", error=type(e).__name__)
+        verification = combine_verification(verification, phase_results, invariant_checks)
+        evidence.write("verification.json", verification)
+        result["phase_results"] = phase_results
+        result["invariant_checks"] = invariant_checks
+        result["browser"] = getattr(
+            runtime,
+            "environment",
+            {"device": browser.device, "engine": browser.engine, "physical_device": False},
+        )
         result["verification"] = verification
         result["video"] = runtime.video_info
         result["cleanup"] = runtime.cleanup
@@ -415,6 +455,7 @@ async def evaluate(
         "target_url": config.app.base_url,
         "repository": repository.metadata() if repository else None,
         "analysis_replay_url": report_base_url,
+        "coverage_limitations": config.coverage_limitations,
         "runs": [],
         "issues": [],
     }

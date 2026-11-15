@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urljoin
 
 from .browser import BrowserRuntime
+from .devices import device_browser
 from .evidence import Evidence
 from .policy import scrub
 from .schema import Task
@@ -135,8 +136,10 @@ async def check_locales(config, *, output=None, pages=None, viewports=None):
     }
     for viewport in viewports:
         evidence = Evidence(root / viewport)
-        browser = config.browser.model_copy(
-            update={"width": 390, "height": 844} if viewport == "mobile" else {}
+        browser = (
+            device_browser(config.browser, "android").model_copy(update={"width": 390, "height": 844})
+            if viewport == "mobile"
+            else config.browser
         )
         runtime = BrowserRuntime(
             config.app,
@@ -202,8 +205,11 @@ async def check_locales(config, *, output=None, pages=None, viewports=None):
                         await runtime.page.evaluate(
                             "() => {window.__uxLocaleCanvas=document.querySelector('canvas');scrollTo(0,0)}"
                         )
-                        await runtime.page.locator("#lang-switch-button").click()
-                        await runtime.page.locator(f'.lang-menu [data-lang="{language}"]').click()
+                        activate = "tap" if viewport == "mobile" else "click"
+                        await getattr(runtime.page.locator("#lang-switch-button"), activate)()
+                        await getattr(
+                            runtime.page.locator(f'.lang-menu [data-lang="{language}"]'), activate
+                        )()
                         await settled(runtime.page, language)
                         snapshot = await runtime.page.evaluate(SNAPSHOT)
                         checks = checks_for(snapshot, language)
@@ -277,7 +283,12 @@ async def check_locales(config, *, output=None, pages=None, viewports=None):
             await runtime.finish()
             evidence.manifest()
             report["runtimes"].append(
-                {"viewport": viewport, "cleanup": runtime.cleanup, "video": runtime.video_info}
+                {
+                    "viewport": viewport,
+                    "cleanup": runtime.cleanup,
+                    "video": runtime.video_info,
+                    "browser": getattr(runtime, "environment", {}),
+                }
             )
     report["status"] = (
         "passed" if report["cases"] and all(c["status"] == "passed" for c in report["cases"]) else "failed"

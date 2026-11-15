@@ -17,7 +17,7 @@ from pydantic import Field, field_validator
 
 from .discovery import check_demo_url
 from .repository import validate_git_url
-from .schema import StrictModel
+from .schema import EvaluationOptions
 
 ACTIVE = {"queued", "planning", "evaluating"}
 JOB_ID = re.compile(r"^\d{8}T\d{6}Z-[a-f0-9]{12}$")
@@ -40,7 +40,7 @@ def validate_host(value):
     return value
 
 
-class ReviewRequest(StrictModel):
+class ReviewRequest(EvaluationOptions):
     repo: str = Field(min_length=8, max_length=500)
     url: str = Field(min_length=8, max_length=2000)
     goals: str = Field(default="", max_length=1500)

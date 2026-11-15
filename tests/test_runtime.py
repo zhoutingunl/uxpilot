@@ -10,6 +10,53 @@ from ai_ux.schema import Action, App, Assertion, Browser, Task
 from ai_ux.verifier import verify
 
 
+async def test_mobile_observation_waits_for_document_body(tmp_path):
+    async with local_site() as url:
+        runtime = BrowserRuntime(
+            App(name="x", base_url=url, allowed_hosts=["127.0.0.1"], environment="local"),
+            Browser(device="android", video=False),
+            Task(id="loading", goal="切页后等待界面就绪"),
+            Evidence(tmp_path / "run"),
+        )
+        try:
+            await runtime.start()
+            await runtime.page.evaluate("""()=>{
+                const body=document.body;body.remove();
+                setTimeout(()=>{body.textContent='Ready after navigation';document.documentElement.append(body)},150);
+            }""")
+            observation = await runtime.observe(0)
+            assert "Ready after navigation" in observation["text"]
+        finally:
+            await runtime.finish()
+
+
+async def test_recovery_navigation_accepts_visited_pages_but_not_guessed_urls(tmp_path):
+    html = b'<meta name="viewport" content="width=device-width,initial-scale=1"><a href="/next">Next</a>'
+    async with local_site(html) as url:
+        runtime = BrowserRuntime(
+            App(name="x", base_url=url, allowed_hosts=["127.0.0.1"], environment="local"),
+            Browser(video=False),
+            Task(id="memory", goal="返回原页面恢复"),
+            Evidence(tmp_path / "run"),
+        )
+        try:
+            await runtime.start()
+            o = await runtime.observe(0)
+            link = next(n for n in o["nodes"] if n["name"] == "Next")
+            assert (await runtime.perform(Action(kind="click", target=link["id"], rationale="切页")))["ok"]
+            await runtime.observe(1)
+            assert url not in runtime.observed_links
+            assert (await runtime.perform(Action(kind="navigate", url=url, rationale="返回已访问的原页面")))[
+                "ok"
+            ]
+            assert runtime.page.url == url
+            assert not (
+                await runtime.perform(Action(kind="navigate", url=url + "guessed", rationale="禁止猜地址"))
+            )["ok"]
+        finally:
+            await runtime.finish()
+
+
 async def test_generic_form_navigation_select_keyboard_and_health(tmp_path):
     async with local_site() as url:
         r = BrowserRuntime(

@@ -36,6 +36,8 @@ def test_cli_config_and_doctor_do_not_show_keys(tmp_path, monkeypatch, capsys):
         ("eval", {"runs": [{"stop_reason": "explorer_done", "judge_status": "completed"}]}, 0),
         ("eval", {"runs": [{"stop_reason": "interrupted", "judge_status": "not_run"}]}, 130),
         ("eval", {"runs": [{"stop_reason": "runtime_error", "judge_status": "failed"}]}, 2),
+        ("eval", {"runs": [{"stop_reason": "journey_incomplete", "judge_status": "completed"}]}, 2),
+        ("eval", {"runs": [{"stop_reason": "journey_completed", "judge_status": "completed"}]}, 0),
         ("judge", {"judge_status": "completed"}, 0),
         ("judge", {"judge_status": "failed"}, 2),
         ("probe-video", {"providers": [{"passed": True}]}, 0),
