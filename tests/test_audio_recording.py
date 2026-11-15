@@ -244,10 +244,12 @@ async def test_disconnect_stops_recording_output_without_stopping_the_source(tmp
         try:
             await runtime.start()
             await runtime.page.evaluate(
-                """async()=>{const c=new AudioContext();await c.resume();const tone=c.createOscillator(),gain=c.createGain();gain.gain.value=.2;tone.connect(gain);gain.connect(c.destination);tone.start();window.testAudio={c,tone,gain};}"""
+                """async()=>{const c=new AudioContext();await c.resume();const tone=c.createOscillator(),gain=c.createGain();gain.gain.value=.2;tone.connect(gain);gain.connect(c.destination);tone.start();window.testAudio={c,tone,gain,started:c.currentTime};}"""
             )
             await runtime.page.wait_for_timeout(350)
-            await runtime.page.evaluate("testAudio.gain.disconnect(testAudio.c.destination)")
+            connected_span = await runtime.page.evaluate(
+                """()=>{const elapsed=testAudio.c.currentTime-testAudio.started;testAudio.gain.disconnect(testAudio.c.destination);return elapsed;}"""
+            )
             await runtime.page.wait_for_timeout(500)
             await runtime.page.evaluate("testAudio.tone.stop()")
         finally:
@@ -256,7 +258,10 @@ async def test_disconnect_stops_recording_output_without_stopping_the_source(tmp
         assert len(streams) == 1 and streams[0]["kind"] == "output"
         intervals = streams[0]["intervals"]
         audible_span = (intervals[-1][1] - intervals[0][0]) / 1000
-        assert 0.15 < audible_span < 0.55
+        # A loaded host can delay the 350 ms browser timer. Compare against
+        # measured audio time; recording must still stop at disconnect while
+        # the oscillator continues running for another 500 ms.
+        assert audible_span > 0.15 and abs(audible_span - connected_span) < 0.2
 
 
 def test_audio_capture_respects_input_authorization_and_byte_budget(tmp_path):

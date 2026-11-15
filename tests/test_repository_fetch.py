@@ -32,10 +32,13 @@ def test_network_retry_discards_partial_checkout_and_publishes_complete_repo(tmp
             )
         assert not attempts[0][0].exists()
         assert kwargs["env"]["GIT_TERMINAL_PROMPT"] == "0"
+        assert kwargs["env"]["GIT_HTTP_LOW_SPEED_TIME"] == "30"
+        assert kwargs["env"]["GIT_HTTP_LOW_SPEED_LIMIT"] == "1000"
         return subprocess.CompletedProcess(cmd, 0)
 
     monkeypatch.setattr(repository.subprocess, "run", run)
     monkeypatch.setattr(repository, "sleep", sleeps.append)
+    monkeypatch.setenv("GIT_HTTP_LOW_SPEED_TIME", "5")
     root = tmp_path / "checkout"
     repo = prepare_repository("https://example.com/project", root, on_progress=events.append)
     assert repo.root == root and repo.fetch == {"attempts": 2, "transport": "HTTP/1.1"}
@@ -59,6 +62,11 @@ def test_network_retry_discards_partial_checkout_and_publishes_complete_repo(tmp
         (b"fatal: could not create work tree dir: No space left on device", "filesystem", 1),
         (b"fatal: unexpected custom helper error token=secret", "git_failed", 1),
         (b"fatal: early EOF", "network", 2),
+        (
+            b"fatal: Operation too slow. Less than 1000 bytes/sec transferred the last 5 seconds",
+            "low_speed_timeout",
+            2,
+        ),
         (b"fatal: unable to access: The requested URL returned error: 503", "network", 2),
     ],
 )
