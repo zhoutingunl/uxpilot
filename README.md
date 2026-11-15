@@ -83,7 +83,7 @@ uv run uxpilot --config artifacts/projects/<project-id>/project.yaml eval --repe
 
 Each run writes an isolated directory under `artifacts/`. Outputs include:
 
-- `report.html`, `report.md`, `report.json`: outcomes, evidence-based issues, reproduction steps, suggested changes, and regression acceptance criteria.
+- `report.html`, `report.md`, `report.json`: outcomes, evidence-based issues, reproduction steps, suggested changes, regression acceptance criteria, and a separate UX optimization section.
 - `events.jsonl`, `observations/`, `screenshots/`: timestamped actions, visible UI, relevant errors, and browser evidence.
 - `session.mp4`: full recording. DuckKing runs capture authorized test-microphone input and actual page Web Audio output into its audio track. `review.mp4`: compact recording with synchronized audio/video cuts that retain audible intervals. `video-timeline.json`: explicit mapping to the original clock.
 - `verification.json`: deterministic checks independent of the Explorer's “done” response.
@@ -91,6 +91,20 @@ Each run writes an isolated directory under `artifacts/`. Outputs include:
 - `model-calls.json`, `manifest.json`: actual models, usage, failure/fallback outcomes, artifact hashes.
 
 For recordings with audio, `judge.mp4` is a picture-identical silent copy used only by the vision models; humans play the audible `review.mp4`. GLM reviews that silent model copy. MiniMax's compatibility path reads continuous 4-second native-video segments and synthesizes their observations; final-segment padding is recorded. Original recordings are retained. Video remains 2 fps. Digital browser audio is not a physical speaker recording and cannot establish hardware volume or fast-motion accuracy. Historical silent videos remain labeled silent; audio is not invented from transcripts or untimed response PCM. See [audio recording](docs/audio-recording.md).
+
+The Judge also receives a portable, adapted subset of **UI/UX Pro Max**: 20 rules for hierarchy, navigation, forms, feedback, readability and responsive layout. These rules ship with the package; the evaluator does not need the original Skill installation or access to another checkout. This integration uses the Skill's review guidance, not its full search engine, palette/font catalog or design-system generator.
+
+The same judgement returns `ux_suggestions` alongside `issues`, with observations, concrete changes, expected benefits (unverified), acceptance checks, evidence references, rule IDs and video timestamps. Suggestions remain `needs_review` and do not affect defect counts or task verification. Invented rules, missing evidence and invalid video clocks are rejected into `ux-suggestions-rejected.json`. `ux-review-context.json` records the successful judgement's exact rule snapshot and hash; prior snapshots are archived when rejudging. `ux-review-attempt.json` records the latest attempt, including failures; a failed rejudge preserves the prior judgement's context. The rules are sent only to Judge, not Explorer. No additional model call is added, though the prompt and response use more tokens.
+
+New and existing profiles enable up to three suggestions by default. Optional top-level YAML settings:
+
+```yaml
+ux_review:
+  enabled: true
+  max_suggestions: 3  # 1–5; enabled: false disables the rule context and suggestions
+```
+
+Only observed UI can support a recommendation. Video alone cannot establish DOM/ARIA semantics, exact contrast ratios, hit-area dimensions, untested keyboard behavior or behavior on other viewports. These can be proposed as acceptance checks. Screenshot-only review remains supported and must disclose its video limitation. Older reports without `ux_suggestions` remain readable.
 
 Retry only judgement after a provider outage:
 

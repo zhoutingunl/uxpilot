@@ -132,6 +132,7 @@ async def test_run_is_checkpointed_verified_and_source_hidden(tmp_path, monkeypa
     explorer = next(data for schema, data, _ in FakeLLM.calls_seen if schema == Action)
     assert "assertions" not in explorer["task"] and "source_repo" not in json.dumps(explorer)
     assert "room" not in explorer["policy"].lower()
+    assert "ux_review" not in explorer
 
 
 @pytest.mark.parametrize("mode,reason", [("runtime", "runtime_error"), ("timeout", "task_timeout")])
@@ -174,10 +175,14 @@ async def test_rejudge_archives_prior_result_and_updates_batch(tmp_path, monkeyp
     prior["source_mapping"] = {"status": "completed", "mappings": [{"issue_index": 99}]}
     (runroot / "run.json").write_text(json.dumps(prior))
     original = (runroot / "run.json").read_text()
+    original_rules = (runroot / "ux-review-context.json").read_text()
+    cfg.ux_review.enabled = False
     result = await agent.rejudge(cfg, runroot)
     assert result["judge_status"] == "completed"
     assert "source_mapping" not in result
     assert next((runroot / "judge-history").glob("*/run.json")).read_text() == original
+    assert next((runroot / "judge-history").glob("*/ux-review-context.json")).read_text() == original_rules
+    assert json.loads((runroot / "ux-review-context.json").read_text())["enabled"] is False
     assert json.loads((root / "report.json").read_text())["runs"][0]["run_id"] == result["run_id"]
     with pytest.raises(ValueError, match="unknown task"):
         await agent.evaluate(cfg, ["unknown"])
@@ -202,6 +207,21 @@ async def test_judge_rejects_unsupplied_and_missing_evidence(tmp_path, monkeypat
 
     result, _ = await agent.judge_run(Invalid(), e, Task(id="x", goal="task"), {}, {"status": "disabled"})
     assert result["issues"] == [] and json.loads((e.root / "judge-rejected.json").read_text())
+
+
+async def test_failed_rejudge_retains_rules_attached_to_prior_judgement(tmp_path, monkeypatch, fake_engine):
+    cfg = config(tmp_path, monkeypatch)
+    root, report = await agent.evaluate(cfg)
+    runroot = root / report["runs"][0]["run_id"]
+    original_rules = (runroot / "ux-review-context.json").read_text()
+    original_judgement = (runroot / "judgement.json").read_text()
+    cfg.ux_review.enabled = False
+    FakeLLM.judgement_error = LLMError("unavailable")
+    result = await agent.rejudge(cfg, runroot)
+    assert result["judge_status"] == "failed"
+    assert (runroot / "ux-review-context.json").read_text() == original_rules
+    assert (runroot / "judgement.json").read_text() == original_judgement
+    assert json.loads((runroot / "ux-review-attempt.json").read_text())["enabled"] is False
 
 
 async def test_judge_uses_native_video_chunks_before_fallback_synthesis(tmp_path, monkeypatch):
@@ -231,8 +251,14 @@ async def test_judge_uses_native_video_chunks_before_fallback_synthesis(tmp_path
             if kw["providers"][0] is p:
                 raise LLMError("unavailable")
             if schema == agent.VideoNotes:
+                assert json.loads(prompt)["review_start_s"] == 0
                 return agent.VideoNotes(observations=["button"], limitations=[]), {}
-            return good_judgement(), {"provider": "b"}
+            from test_ux_review import suggestion
+
+            assert json.loads(prompt)["ux_review"]["name"] == "ui-ux-pro-max"
+            judgement = good_judgement()
+            judgement.ux_suggestions = [suggestion(video_timestamps=["00:02"])]
+            return judgement, {"provider": "b"}
 
     result, call = await agent.judge_run(
         Model(), e, Task(id="x", goal="task"), {}, {"status": "ready", "review": {"path": "review.mp4"}}
@@ -241,6 +267,7 @@ async def test_judge_uses_native_video_chunks_before_fallback_synthesis(tmp_path
     assert seen[1][1]["video"].name == "clip.mp4"
     assert "video" not in seen[2][1]
     assert json.loads((e.root / "video-notes.json").read_text())[0]["padding_seconds"] == 1
+    assert result["ux_suggestions"][0]["rule_refs"] == ["primary-action"]
 
 
 def test_source_version_nonexistent_path_returns_none(tmp_path):

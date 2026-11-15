@@ -196,11 +196,17 @@ class Task(StrictModel):
         }
 
 
+class UXReview(StrictModel):
+    enabled: bool = True
+    max_suggestions: int = Field(default=3, ge=1, le=5)
+
+
 class Config(StrictModel):
     app: App
     models: Models
     browser: Browser = Field(default_factory=Browser)
     speech: Speech | None = None
+    ux_review: UXReview = Field(default_factory=UXReview)
     output_dir: str = "artifacts/agent"
     tasks: list[Task]
 
@@ -308,10 +314,35 @@ class Finding(StrictModel):
     status: Literal["candidate", "needs_review"] = "needs_review"
 
 
+class UXSuggestion(StrictModel):
+    category: Literal[
+        "visual_hierarchy",
+        "navigation",
+        "interaction",
+        "feedback",
+        "forms",
+        "readability",
+        "accessibility",
+        "responsive",
+    ]
+    priority: Literal["high", "medium", "low"]
+    title: str = Field(min_length=4, max_length=150)
+    observations: list[str] = Field(min_length=1, max_length=3)
+    recommendation: str = Field(min_length=1, max_length=1200)
+    expected_benefit: str = Field(min_length=1, max_length=500)
+    acceptance: list[str] = Field(min_length=1, max_length=5)
+    evidence_refs: list[str] = Field(min_length=1, max_length=10)
+    rule_refs: list[str] = Field(min_length=1, max_length=5)
+    confidence: Literal["high", "medium", "low"]
+    video_timestamps: list[str] = Field(default_factory=list, max_length=5)
+    status: Literal["needs_review"] = "needs_review"
+
+
 class Judgement(StrictModel):
     summary: str
     task_assessment: Literal["passed", "partial", "failed", "inconclusive"]
     strengths: list[str] = Field(default_factory=list, max_length=10)
     issues: list[Finding] = Field(default_factory=list, max_length=12)
+    ux_suggestions: list[UXSuggestion] = Field(default_factory=list, max_length=5)
     limitations: list[str] = Field(default_factory=list, max_length=12)
     video_observations: list[str] = Field(default_factory=list, max_length=12)
