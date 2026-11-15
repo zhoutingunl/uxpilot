@@ -385,6 +385,9 @@ class BrowserRuntime:
             self.evidence.event("voice_event", direction=direction, data=fields)
 
     async def observe(self, step: int):
+        # Touch navigation can commit a new document before its body exists.
+        await self.page.wait_for_load_state("domcontentloaded", timeout=30000)
+        await self.page.locator("body").wait_for(state="attached", timeout=10000)
         # Clear stale handles before constructing the current observation.
         await self.page.locator("[data-ux-id]").evaluate_all(
             "es=>es.forEach(e=>e.removeAttribute('data-ux-id'))"
