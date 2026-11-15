@@ -67,6 +67,12 @@ def create_app(settings: Settings | None = None):
     async def jobs_page():
         return HTMLResponse((static / "jobs.html").read_text())
 
+    @app.get("/api/capabilities")
+    async def capabilities():
+        from .devices import available_devices
+
+        return {"devices": await available_devices(), "physical_devices": False}
+
     @app.get("/stats", response_class=HTMLResponse)
     async def stats_page():
         return HTMLResponse((static / "stats.html").read_text())

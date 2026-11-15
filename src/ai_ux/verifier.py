@@ -18,6 +18,13 @@ def completed_actions(events):
 
 
 def check_events(assertion, events):
+    if assertion.kind == "demo_completed":
+        return any(
+            e["kind"] == "demo_result"
+            and e.get("data", {}).get("status") == "completed"
+            and e.get("data", {}).get("mode") == "scripted_rehearsal"
+            for e in events
+        )
     input_index = next(
         (i for i in range(len(events) - 1, -1, -1) if events[i]["kind"] == "audio_input_start"), None
     )
@@ -125,11 +132,13 @@ def check_events(assertion, events):
     return None
 
 
-async def verify(runtime, assertions):
+async def verify(runtime, assertions, *, events=None):
     rows = []
     for assertion in assertions:
         try:
-            result = check_events(assertion, runtime.evidence.events)
+            if assertion.kind == "demo_completed" and runtime.app.adapter != "duckking":
+                raise ValueError("demo_completed requires duckking")
+            result = check_events(assertion, runtime.evidence.events if events is None else events)
             if result is None:
                 result = await runtime.inspect_assertion(assertion)
             rows.append(

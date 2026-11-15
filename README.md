@@ -81,6 +81,30 @@ uv run uxpilot --config artifacts/projects/<project-id>/project.yaml eval --repe
 
 ## Reports and evidence
 
+The workbench now defaults to **desktop + Android touch emulation** and a **stateful** strategy. Each planned goal runs independently on each selected device; all phases within one run share its browser, cookies, storage and owned room. A two-goal, two-device submission therefore produces four runs. The task step/time budgets include all phases. API requests that omit the new fields keep the earlier desktop/standard defaults.
+
+```bash
+# Plan and run interruption/recovery goals on desktop and Android (the review defaults)
+uv run uxpilot review --repo /path/to/project --url https://demo.example.com/ \
+  --device desktop --device android --coverage stateful --max-steps 24 --timeout 600
+
+# Add WebKit-based iPhone emulation on a host where WebKit is installed
+uv run playwright install webkit
+uv run uxpilot review --repo /path/to/project --url https://demo.example.com/ --device iphone
+
+# Keep the previous single-device, normal-flow scope
+uv run uxpilot review --repo /path/to/project --url https://demo.example.com/ \
+  --device desktop --coverage standard
+```
+
+Stateful plans describe setup, interruption/page transition, recovery and retry goals. Explorer receives the current phase goal, not the private acceptance selectors. Phase checkpoints retain observations and independent verification; recovery success never erases an earlier failure. Setup failure blocks its dependent transition while leaving recovery available. Budget exhaustion is reported as incomplete coverage. Without private business assertions a phase remains `not_verified`; the independent video's phase assessment is recorded separately. The planner must supply a stateful chain or explicitly explain why it could not plan one.
+
+For configured tasks, add `phases` with `id`, `role`, `goal`, `max_steps` and private `assertions`. An optional `auto_advance: true` ends a setup phase as soon as its positive business assertions pass, so the next phase can interrupt an active task. Every phase is bounded by the shared task budget. `phase-results.json`, `phases/`, `invariant-checks.json` and `browser-environment.json` accompany the existing run artifacts. Reports show original transition and recovery outcomes separately.
+
+Mobile runs use a mobile UA, device scale, coarse pointer and touch taps. Android scrolling/press-to-talk uses Chromium touch input; rotation changes the simulated viewport. Required checks inspect viewport scaling, horizontal overflow and focused-input occlusion at each observation, so a later clean page does not erase an earlier layout failure. iPhone mode runs WebKit and never falls back to desktop Chrome. A missing browser is a coverage/runtime error, not a passed device test; the form disables unavailable WebKit installations.
+
+These are [browser device emulations](https://playwright.dev/python/docs/emulation), not physical phones. System keyboards, dynamic browser chrome, real safe-area behavior, device permissions, GPU/audio hardware and physical rotation still require real-device checks. WebKit scrolling is programmatic; fake microphone input is currently Chromium-only. Some WebKit builds report `navigator.maxTouchPoints=0` despite emitting touch events; the actual value and limitation are recorded instead of being spoofed. `check-locales --viewport mobile` now also uses the Android touch profile.
+
 Each run writes an isolated directory under `artifacts/`. Outputs include:
 
 - `report.html`, `report.md`, `report.json`: outcomes, evidence-based issues, reproduction steps, suggested changes, regression acceptance criteria, and a separate UX optimization section.
@@ -122,6 +146,15 @@ The original project-specific profile remains available:
 ```bash
 uv run uxpilot --config configs/duckking.yaml eval --task first-nod --task local-voice
 ```
+
+The profile also includes the same-room director → theatre → stop → theatre recovery chain:
+
+```bash
+uv run uxpilot --config configs/duckking.yaml eval --task director-demo-recovery \
+  --device desktop --device android
+```
+
+It requires a fresh theatre completion in each relevant phase, not a previous completion, a button click or an HTTP 200. No new room, storage reset or hidden backend release is used to recover. Scene availability or setup failure stays explicit. The existing `mobile-nod` task now uses touch emulation and requires the preview and action control to fit together in the viewport.
 
 It adds independent room ownership, real ASR/cloud voice through synthetic WAV input, model-first-frame checks and actual action results. It targets a public demo and can consume Lingxi voice quota. Generic review does not call DuckKing endpoints or assume its selectors. The voice fixtures contain system-generated speech, not human recordings.
 

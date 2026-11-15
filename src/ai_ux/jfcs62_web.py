@@ -120,6 +120,8 @@ def create_jfcs62_app(base: Path, release: Path, settings=None):
             "goal": body.get("goals", ""),
             "tasks": body.get("tasks", 3),
             "ref": body.get("ref", ""),
+            "devices": body.get("devices", ["desktop"]),
+            "coverage": body.get("coverage", "standard"),
         }
         try:
             item = JobRequest.model_validate(data)

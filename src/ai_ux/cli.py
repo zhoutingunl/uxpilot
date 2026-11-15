@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .agent import evaluate, rejudge
+from .devices import expand_tasks
 from .discovery import discover
 from .llm import read_key
 from .locales import check_locales
@@ -23,7 +24,9 @@ def evaluation_exit(result):
     return (
         2
         if any(
-            r["stop_reason"] == "runtime_error" or r["judge_status"] != "completed" for r in result["runs"]
+            r["stop_reason"] in {"runtime_error", "task_timeout", "journey_incomplete"}
+            or r["judge_status"] != "completed"
+            for r in result["runs"]
         )
         else 0
     )
@@ -56,6 +59,7 @@ def main():
     run = commands.add_parser("eval", help="执行配置任务并保存 HTML/Markdown/JSON 报告")
     run.add_argument("--task", action="append", dest="tasks")
     run.add_argument("--repeats", type=int, choices=range(1, 6))
+    run.add_argument("--device", action="append", choices=["desktop", "android", "iphone"], dest="devices")
     project = commands.add_parser("review", help="从仓库路径/Git URL 与演示地址自动规划并执行通用体验")
     project.add_argument("--repo", required=True, help="本地目录或 HTTPS/SSH Git 仓库 URL")
     project.add_argument("--url", required=True, help="演示页面完整 URL（保留路径/查询参数）")
@@ -67,9 +71,22 @@ def main():
     project.add_argument("--allow-host", action="append", default=[], help="额外允许导航的精确域名")
     project.add_argument("--resource-host", action="append", default=[], help="仅允许加载资源的 CDN/API 域名")
     project.add_argument("--adapter", choices=["generic", "duckking"], default="generic")
-    project.add_argument("--max-steps", type=int, default=12, choices=range(1, 41))
-    project.add_argument("--timeout", type=int, default=360, help="每任务秒数，包含 LLM 决策")
+    project.add_argument("--max-steps", type=int, default=24, choices=range(1, 41))
+    project.add_argument("--timeout", type=int, default=600, help="每任务秒数，包含 LLM 决策")
     project.add_argument("--repeats", type=int, default=1, choices=range(1, 6))
+    project.add_argument(
+        "--device",
+        action="append",
+        choices=["desktop", "android", "iphone"],
+        dest="devices",
+        help="可重复；默认桌面与 Android 触屏模拟",
+    )
+    project.add_argument(
+        "--coverage",
+        choices=["standard", "stateful"],
+        default="stateful",
+        help="默认加入中途切换与恢复重试阶段",
+    )
     args = parser.parse_args()
     try:
         if args.command == "review":
@@ -89,6 +106,8 @@ def main():
                     adapter=args.adapter,
                     task_steps=args.max_steps,
                     task_timeout=args.timeout,
+                    devices=list(dict.fromkeys(args.devices or ["desktop", "android"])),
+                    coverage=args.coverage,
                 )
                 if args.plan_only:
                     return 0
@@ -120,6 +139,8 @@ def main():
                         "browser": config.browser.channel
                         or config.browser.executable_path
                         or "bundled chromium",
+                        "device": config.browser.device,
+                        "engine": config.browser.engine,
                         "providers": [
                             {"provider": p.name, "model": p.model, "credential_available": bool(read_key(p))}
                             for p in [config.models.primary, config.models.fallback]
@@ -147,7 +168,14 @@ def main():
         if args.command == "judge":
             result = asyncio.run(rejudge(config, args.run_dir.resolve()))
             return 0 if result["judge_status"] == "completed" else 2
-        _, result = asyncio.run(evaluate(config, args.tasks, args.repeats))
+        task_ids = args.tasks
+        if args.devices:
+            selected = [t for t in config.tasks if not task_ids or t.id in task_ids]
+            if task_ids and set(task_ids) - {t.id for t in selected}:
+                raise ValueError("unknown task id")
+            config.tasks = expand_tasks(selected, config.browser, list(dict.fromkeys(args.devices)))
+            task_ids = None
+        _, result = asyncio.run(evaluate(config, task_ids, args.repeats))
         return evaluation_exit(result)
     except KeyboardInterrupt:
         print("Interrupted; completed artifacts retained.", file=sys.stderr)
