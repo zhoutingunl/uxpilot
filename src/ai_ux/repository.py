@@ -8,8 +8,10 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from time import sleep
 from urllib.parse import urlsplit
 
 from .policy import scrub
@@ -59,6 +61,150 @@ DENY_FILE = re.compile(
 MAX_FILE_BYTES = 256_000
 MAX_FILES = 2500
 MAX_SCAN_BYTES = 8_000_000
+
+
+def clone_failure(error):
+    """Classify stderr without exposing credentials or arbitrary helper output."""
+    if isinstance(error, subprocess.TimeoutExpired):
+        return "timeout", "连接或传输超过 120 秒", True
+    if isinstance(error, OSError):
+        return "git_unavailable", "无法启动 Git，请检查服务器安装和执行权限", False
+    stderr = getattr(error, "stderr", None) or b""
+    message = (stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr).lower()
+    if "remote branch" in message and "not found" in message:
+        return "ref_not_found", "指定的分支或标签不存在", False
+    if any(
+        s in message
+        for s in (
+            "authentication failed",
+            "could not read username",
+            "permission denied (publickey)",
+            "error: 401",
+            "error: 403",
+        )
+    ):
+        return "access_denied", "Git 凭据无访问权限或服务器拒绝访问", False
+    if (
+        re.search(r"repository[^\n]{0,500}not found", message)
+        or "does not appear to be a git repository" in message
+    ):
+        return "repository_not_found", "仓库不存在或当前 Git 凭据无访问权限", False
+    if any(
+        s in message
+        for s in (
+            "certificate problem",
+            "certificate verify",
+            "certificate verification",
+            "server certificate",
+            "curl 60",
+        )
+    ):
+        return "certificate", "TLS 证书校验失败，请检查服务器证书配置", False
+    if any(
+        s in message
+        for s in (
+            "no space left",
+            "read-only file system",
+            "could not create work tree",
+            "cannot create directory",
+        )
+    ):
+        return "filesystem", "无法写入检出目录，请检查磁盘空间和目录权限", False
+    if any(
+        s in message
+        for s in (
+            "could not resolve",
+            "failed to connect",
+            "connection reset",
+            "connection timed out",
+            "timed out",
+            "early eof",
+            "remote end hung up",
+            "unexpected disconnect",
+            "gnutls",
+            "ssl_error_syscall",
+            "rpc failed",
+            "curl 7",
+            "curl 18",
+            "curl 28",
+            "curl 35",
+            "curl 52",
+            "curl 55",
+            "curl 56",
+            "curl 92",
+            "error: 429",
+            "error: 500",
+            "error: 502",
+            "error: 503",
+            "error: 504",
+        )
+    ):
+        return "network", "网络连接或 Git 数据传输中断", True
+    return (
+        "git_failed",
+        f"Git 进程退出（状态 {getattr(error, 'returncode', 'unknown')}），请管理员检查 Git 配置",
+        False,
+    )
+
+
+def clone_repository(origin, root, ref, *, on_progress=None):
+    env = {
+        **os.environ,
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_LFS_SKIP_SMUDGE": "1",
+        "GIT_SSH_COMMAND": "ssh -oBatchMode=yes",
+    }
+    for attempt in range(1, 3):
+        transport = "HTTP/1.1" if attempt == 2 and origin.startswith("https://") else "default"
+
+        def progress(status, **fields):
+            if on_progress:
+                on_progress(
+                    {
+                        "status": status,
+                        "attempt": attempt,
+                        "max_attempts": 2,
+                        "transport": transport,
+                        **fields,
+                    }
+                )
+
+        progress("running")
+        # Every attempt owns a fresh staging directory. A failed clone cannot
+        # leave a half checkout at the destination or delete an existing repo.
+        with tempfile.TemporaryDirectory(prefix=".clone-", dir=root.parent) as staging:
+            checkout = Path(staging) / "checkout"
+            cmd = [
+                "git",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "protocol.file.allow=never",
+                "-c",
+                "filter.lfs.smudge=",
+                "-c",
+                "filter.lfs.required=false",
+            ]
+            if transport != "default":
+                cmd += ["-c", "http.version=HTTP/1.1"]
+            cmd += ["clone", "--depth", "1", "--no-recurse-submodules"]
+            if ref:
+                cmd += ["--branch", ref]
+            cmd += ["--", origin, str(checkout)]
+            try:
+                subprocess.run(cmd, env=env, capture_output=True, timeout=120, check=True)
+            except (OSError, subprocess.SubprocessError) as error:
+                code, hint, retryable = clone_failure(error)
+                progress("failed", code=code, message=hint, retrying=retryable and attempt < 2)
+                if not retryable or attempt == 2:
+                    raise ValueError(f"Git clone 失败 [{code}]，已尝试 {attempt} 次：{hint}") from None
+            else:
+                if root.exists():
+                    raise ValueError("clone destination already exists")
+                checkout.replace(root)
+                progress("completed")
+                return {"attempts": attempt, "transport": transport}
+        sleep(1)
 
 
 def git(root: Path, *args: str) -> str | None:
@@ -155,6 +301,7 @@ class Repository:
     dirty: bool | None
     truncated: bool
     documents: list[dict] = field(default_factory=list)
+    fetch: dict | None = None
 
     def read(self, relative: str) -> str:
         if relative not in self.files:
@@ -178,6 +325,7 @@ class Repository:
             "inventory_truncated": self.truncated,
             "documents": self.documents,
             "deployment_match": "unknown; source version is not proof of deployed version",
+            "fetch": self.fetch,
         }
 
     def snippets(self, issues: list[dict], observations: list[dict], limit=10):
@@ -232,9 +380,12 @@ class Repository:
         return [s for _, s in sorted(scored, key=lambda pair: pair[0], reverse=True)[:limit]]
 
 
-def prepare_repository(value: str, destination: Path, ref: str | None = None) -> Repository:
+def prepare_repository(
+    value: str, destination: Path, ref: str | None = None, *, on_progress=None
+) -> Repository:
     local = Path(value).expanduser()
     cloned = not local.is_dir()
+    fetch = None
     if not cloned:
         if ref:
             raise ValueError("--ref only applies to remote clones; local worktrees are never checked out")
@@ -248,34 +399,7 @@ def prepare_repository(value: str, destination: Path, ref: str | None = None) ->
         root.parent.mkdir(parents=True, exist_ok=True)
         if root.exists():
             raise ValueError("clone destination already exists")
-        cmd = [
-            "git",
-            "-c",
-            "core.hooksPath=/dev/null",
-            "-c",
-            "protocol.file.allow=never",
-            "-c",
-            "filter.lfs.smudge=",
-            "-c",
-            "filter.lfs.required=false",
-            "clone",
-            "--depth",
-            "1",
-            "--no-recurse-submodules",
-        ]
-        if ref:
-            cmd.extend(["--branch", ref])
-        cmd.extend(["--", origin, str(root)])
-        env = {
-            **os.environ,
-            "GIT_TERMINAL_PROMPT": "0",
-            "GIT_LFS_SKIP_SMUDGE": "1",
-            "GIT_SSH_COMMAND": "ssh -oBatchMode=yes",
-        }
-        try:
-            subprocess.run(cmd, env=env, capture_output=True, timeout=120, check=True)
-        except (OSError, subprocess.SubprocessError):
-            raise ValueError("Git clone failed; check URL, existing Git credentials and network") from None
+        fetch = clone_repository(origin, root, ref, on_progress=on_progress)
     files, truncated = enumerate_files(root)
     status = git(root, "status", "--porcelain")
     repo = Repository(
@@ -286,6 +410,7 @@ def prepare_repository(value: str, destination: Path, ref: str | None = None) ->
         git(root, "rev-parse", "HEAD"),
         None if status is None else bool(status),
         truncated,
+        fetch=fetch,
     )
     budget = 18000
     docs = [f for f in files if Path(f).name.lower().startswith("readme")]

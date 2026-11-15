@@ -114,7 +114,24 @@ async def discover(
     project_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
     root = output.resolve() / project_id
     root.mkdir(parents=True, exist_ok=False)
-    repo = await asyncio.to_thread(prepare_repository, repo_value, root / "checkout", ref)
+    evidence = Evidence(root / "discovery")
+    evidence.event("stage", stage="repository", status="running")
+    try:
+        repo = await asyncio.to_thread(
+            prepare_repository,
+            repo_value,
+            root / "checkout",
+            ref,
+            on_progress=lambda data: evidence.event("repository_fetch", **data),
+        )
+    except Exception as error:
+        evidence.event("stage_error", stage="repository", error=str(scrub(str(error)))[:1000])
+        render_replay(
+            evidence.root,
+            {"task_id": "repository", "goal": "获取评测仓库", "stop_reason": "repository_failed"},
+        )
+        evidence.manifest()
+        raise
     (root / "repository.json").write_text(
         json.dumps(scrub(repo.metadata()), ensure_ascii=False, indent=2) + "\n"
     )
@@ -131,7 +148,6 @@ async def discover(
     browser = browser or Browser(video_max_seconds=600)
     planning_browser = device_browser(browser, devices[0]) if devices else browser
     models = models or default_models()
-    evidence = Evidence(root / "discovery")
     task = Task(id="discovery", goal="观察首页以规划体验目标", start_path=url)
     runtime = BrowserRuntime(app, planning_browser.model_copy(update={"video": False}), task, evidence)
     observation = None

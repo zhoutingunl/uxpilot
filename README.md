@@ -74,6 +74,8 @@ uv run uxpilot --config artifacts/projects/<project-id>/project.yaml eval --repe
 ```
 
 - HTTPS and SSH Git URLs are cloned into the evaluation directory. Private repositories use existing non-interactive Git credentials. Local directories are read-only; no checkout, install, build, hooks, or submodule initialization is performed by the evaluator.
+
+Repository transfers retry once for transient connection failures or a 120-second timeout. Each attempt uses a fresh staging directory; only a complete checkout is published. HTTPS retries use a command-local HTTP/1.1 option. Access, branch, certificate and filesystem errors stop immediately with a credential-safe reason. Fetch attempts appear in planning events and successful repository metadata; failed fetches retain their evidence.
 - Planning uses limited README/product documentation and an actual landing-page observation. Explorer receives the goal and current UI, **not source code or private assertions**. Judge runs in a fresh context. Source localization happens after UX judgement and checks path, line, and quote against the inspected source.
 - Generic mode allows public HTTP(S) GET/HEAD subresources so normal CDN assets can load, while top-level navigation stays on the supplied host. Additional navigation hosts use `--allow-host`; known API/CDN hosts use `--resource-host`. Local/private literal IPs are blocked unless explicitly configured. This policy is not a network sandbox and does not implement DNS rebinding protection.
 - Automatic checks cover readable pages, JavaScript errors, and horizontal overflow. They **do not prove business success**. Without configured task assertions the report says `task_outcome: not_verified`, and displays the independent Judge's assessment separately.
