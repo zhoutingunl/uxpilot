@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from .media import audio_note
-from .replay import render_batch_replay
+from .replay import render_batch_replay, render_suggestions
 
 
 def aggregate(runs: list[dict]):
@@ -144,6 +144,47 @@ def render(root: Path, report: dict):
                 ]
             lines += [i.get("source_limitation", ""), ""]
     lines += [
+        "## UX 优化建议",
+        "",
+        "依据 UI/UX Pro Max 规则提出，均待人工复核；不计入缺陷数量，预期收益尚未验证。",
+        "",
+    ]
+    for run in report["runs"]:
+        judgement = run.get("judgement") or {}
+        if "ux_suggestions" not in judgement:
+            continue
+        lines += [f"### {run['task_id']} · 第 {run['attempt']} 次", ""]
+        if not judgement["ux_suggestions"]:
+            lines += ["本次未产出 UX 优化建议，不能据此认定界面已通过设计或可访问性验收。", ""]
+        for item in judgement["ux_suggestions"]:
+            lines += [
+                f"#### {item['title']}",
+                "",
+                f"优先级：{item['priority']}；证据把握：{item['confidence']}；状态：needs_review。",
+                "",
+                "**观察事实**",
+                "",
+            ]
+            lines += [f"- {s}" for s in item["observations"]]
+            lines += [
+                "",
+                f"**具体建议：** {item['recommendation']}",
+                "",
+                f"**预期收益（待验证）：** {item['expected_benefit']}",
+                "",
+                "**验收方式**",
+                "",
+            ]
+            lines += [f"- {s}" for s in item["acceptance"]]
+            lines += ["", "规则：" + "、".join(f"`{r}`" for r in item["rule_refs"]), ""]
+            lines += [
+                "证据：" + " · ".join(f"[{ref}]({run['run_id']}/{ref})" for ref in item["evidence_refs"]),
+                "",
+            ]
+            if item.get("video_timestamps"):
+                lines += ["视频时间点：" + "、".join(item["video_timestamps"]), ""]
+        lines += [f"[本次评审规则与版本]({run['run_id']}/ux-review-context.json)", ""]
+    lines += [
         "## 模型和覆盖边界",
         "",
         "- GLM-5.3 Flash 为主，MiniMax-M3.1 Flash 为备用；每次实际调用与回退原因保存在 model-calls.json。",
@@ -185,6 +226,7 @@ def render(root: Path, report: dict):
         body.append(
             f'<p><a href="{rid}/replay.html">分析回放</a> · <a href="{rid}/run.json">运行证据</a> · <a href="{rid}/verification.json">验收</a></p></section>'
         )
+        body.append(render_suggestions(r.get("judgement") or {}, r["run_id"] + "/"))
     for i in report["issues"]:
         body.append(
             f"<section><h2>{html.escape(i['severity'] + ' · ' + i['title'])}</h2><p>{html.escape(i['inference'])}</p><p>{html.escape(i['recommendation'])}</p><ul>"

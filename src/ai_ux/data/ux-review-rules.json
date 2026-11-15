@@ -1,0 +1,34 @@
+{
+  "name": "ui-ux-pro-max",
+  "version": "uxpilot-video-review-1",
+  "scope": "Adapted Quick Reference subset for reviewing observed browser UI; not the full Skill or its search engine.",
+  "source": {
+    "file": ".agents/skills/ui-ux-pro-max/SKILL.md",
+    "installation_project": "DuckKing",
+    "sha256": "e5baf9400d4347e5ed3eb1f6b99cd0b9ba545b8b0e507aabb2b87397bbf73ea1",
+    "section": "Quick Reference"
+  },
+  "evidence_policy": "规则是设计参考，不是产品事实。仅对本次实际可见或已操作的界面提出建议。不得从录屏推断 DOM 语义、屏幕阅读器支持、精确对比度、点击区域尺寸或未测交互；需要测量或操作的结论只能作为验收项。保持产品现有品牌和组件风格，预期收益是待验证假设，不编造统计。",
+  "rules": [
+    {"id": "visual-hierarchy", "category": "visual_hierarchy", "guidance": "用标题、分组和留白突出当前任务内容，减少同级元素争夺注意力。"},
+    {"id": "primary-action", "category": "visual_hierarchy", "guidance": "让当前任务的主要操作容易识别，次要操作保持较低视觉强调。"},
+    {"id": "consistency", "category": "visual_hierarchy", "guidance": "相同含义的控件使用一致的图标、文案、颜色、间距和状态表达，延续产品已有设计。"},
+    {"id": "whitespace-balance", "category": "visual_hierarchy", "guidance": "用稳定的间距区分组件、分组和区块，避免相关信息过度分散或拥挤。"},
+    {"id": "nav-state-active", "category": "navigation", "guidance": "清楚标识当前位置、已选项和可达入口，使导航状态与实际内容对应。"},
+    {"id": "nav-label-icon", "category": "navigation", "guidance": "对含义不明显的导航图标提供可见文字，避免用户依靠猜测寻找关键功能。"},
+    {"id": "state-preservation", "category": "navigation", "guidance": "实际返回操作应保留合理的输入、筛选和滚动状态；仅在观察到返回行为后判断。"},
+    {"id": "state-clarity", "category": "interaction", "guidance": "让可操作、选中、执行中和不可用状态容易区分，按下和操作完成后给出明确反馈。"},
+    {"id": "loading-states", "category": "feedback", "guidance": "等待过程说明正在发生什么，结合实际事件判断是否需要进度、占位或重试，排除 Agent 决策等待。"},
+    {"id": "success-feedback", "category": "feedback", "guidance": "完成操作后在相关位置确认结果，避免用户不确定是否生效而重复操作。"},
+    {"id": "error-recovery", "category": "feedback", "guidance": "错误信息说明问题和下一步恢复方式；先排除评测工具、权限与范围限制引起的错误。"},
+    {"id": "input-labels", "category": "forms", "guidance": "表单提供持续可见的字段名称与必要说明，不让示例占位文字承担唯一标签作用。"},
+    {"id": "error-placement", "category": "forms", "guidance": "在相关字段附近展示具体错误和改正方法，保留已填内容；需实际验证后再断言校验行为。"},
+    {"id": "progressive-disclosure", "category": "forms", "guidance": "优先展示完成当前任务所需的信息，把高级或低频设置置于可发现的后续入口。"},
+    {"id": "contrast-readability", "category": "readability", "guidance": "提高低辨识度文字与背景的视觉区分，保持正文层级清楚；仅凭视频不报告精确对比度数值。"},
+    {"id": "truncation-strategy", "category": "readability", "guidance": "关键状态、按钮和用户内容优先完整呈现，长文本合理换行，必要时提供可操作的展开入口。"},
+    {"id": "color-not-only", "category": "accessibility", "guidance": "用文字、图形或形状补充颜色表达，尤其是状态、错误和已选项。"},
+    {"id": "focus-not-obscured", "category": "accessibility", "guidance": "固定区域和弹层不遮挡键盘焦点；只有存在实际键盘轨迹才能判断焦点行为，否则列为待验收。"},
+    {"id": "content-priority", "category": "responsive", "guidance": "在本次实际视口优先展示核心内容和操作，避免次要信息挤占任务空间；不外推未测设备。"},
+    {"id": "fixed-element-offset", "category": "responsive", "guidance": "固定导航、浮层和底栏应为内容留出空间，避免遮挡关键结果或操作。"}
+  ]
+}

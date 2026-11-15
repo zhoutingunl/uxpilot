@@ -264,7 +264,9 @@ async def check_scenes(config, *, output=None, cases=None, judge=False, timeout=
             models = config.models.model_copy(update={"fallback": config.models.primary})
             llm = LLM(models, on_call=lambda c: evidence.event("model_call", **c))
             try:
-                judgement, call = await judge_run(llm, evidence, task, verification, runtime.video_info)
+                judgement, call = await judge_run(
+                    llm, evidence, task, verification, runtime.video_info, ux_review=config.ux_review
+                )
                 case.update(judgement=judgement, judge_status="completed", judge_model=call)
             except Exception as exc:
                 case.update(judge_status="failed", judge_error=str(exc)[:500])

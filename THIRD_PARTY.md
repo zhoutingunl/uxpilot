@@ -16,3 +16,5 @@ The model protocol configuration was checked against the user's `ai_gateway` int
 The optional audio fixtures were synthesized locally with macOS Tingting for command-input tests. They contain no recorded human voice. They are sample input, not model/vendor responses. Replace them with fixtures whose terms fit your deployment if redistributing audio separately.
 
 Live compatibility validation used [Marked](https://github.com/markedjs/marked) (MIT) and its public demo. No Marked source or live recording is distributed here. Provider/model access is governed by the applicable provider terms and is not granted by this project's license.
+
+The UX review rule pack (`src/ai_ux/data/ux-review-rules.json`) paraphrases a focused subset of the Quick Reference in the user's locally installed `ui-ux-pro-max` Skill. Its installation-relative source path and SHA-256 are recorded in the pack. The integration bundles these adapted review rules, not the original Skill document, datasets, scripts, fonts, icons or other assets. Rule IDs are retained for traceability; recommendations do not establish accessibility compliance or verified user benefit.

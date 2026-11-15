@@ -52,6 +52,36 @@ def details(label, value):
     return f"<details><summary>{escape(label)}</summary><pre>{escape(json.dumps(scrub(value), ensure_ascii=False, indent=2))}</pre></details>"
 
 
+def render_suggestions(judgement: dict, prefix: str = "") -> str:
+    if "ux_suggestions" not in judgement:
+        return ""
+    suggestions = judgement["ux_suggestions"]
+    body = '<section><h2>UX 优化建议</h2><p class="meta">依据 UI/UX Pro Max 规则提出，均待人工复核；预期收益尚未验证。</p>'
+    if not suggestions:
+        return body + "<p>本次未产出 UX 优化建议，不能据此认定界面已通过设计或可访问性验收。</p></section>"
+    priorities = {"high": "高", "medium": "中", "low": "低"}
+    for item in suggestions:
+        body += f"<article><h3>{escape(priorities.get(item['priority'], item['priority']))}优先级 · {escape(item['title'])}</h3><ul>"
+        body += "".join(f"<li>{escape(s)}</li>" for s in item["observations"])
+        body += f"</ul><p><b>具体建议：</b>{escape(item['recommendation'])}</p>"
+        body += f"<p><b>预期收益（待验证）：</b>{escape(item['expected_benefit'])}</p><p><b>验收方式：</b></p><ul>"
+        body += "".join(f"<li>{escape(s)}</li>" for s in item["acceptance"])
+        body += "</ul><p>规则：" + "、".join(f"<code>{escape(r)}</code>" for r in item["rule_refs"]) + "</p>"
+        body += (
+            "<p>证据："
+            + " · ".join(
+                f'<a href="{quote(prefix + ref, safe="/-._")}">{escape(ref)}</a>'
+                for ref in item["evidence_refs"]
+            )
+            + "</p>"
+        )
+        if item.get("video_timestamps"):
+            body += "<p>视频时间点：" + escape("、".join(item["video_timestamps"])) + "</p>"
+        body += f'<p class="meta">证据把握：{escape(item["confidence"])} · 待复核</p></article>'
+    body += f'<p><a href="{quote(prefix + "ux-review-context.json", safe="/-._")}">本次评审规则与版本</a></p></section>'
+    return body
+
+
 def render_replay(root: Path, run: dict | None = None):
     run = run or read_json(root / "run.json", {})
     events = (
@@ -66,6 +96,7 @@ def render_replay(root: Path, run: dict | None = None):
         if value is not None:
             body += details(label, value)
     body += "</section>"
+    body += render_suggestions(run.get("judgement") or read_json(root / "judgement.json", {}))
     if (root / "review.mp4").is_file():
         body += (
             '<section><h2>浏览器回放</h2><video controls preload="metadata" src="review.mp4"></video><nav>'
