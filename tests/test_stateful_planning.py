@@ -36,12 +36,17 @@ def plan():
     )
 
 
-async def test_discovery_persists_phases_and_independent_mobile_matrix(tmp_path, monkeypatch):
+@pytest.mark.parametrize("has_phases", [True, False])
+async def test_discovery_persists_phases_and_independent_mobile_matrix(tmp_path, monkeypatch, has_phases):
     captured = []
 
     async def structured(self, system, prompt, schema, **kwargs):
         captured.append((schema, json.loads(prompt)))
-        return plan(), {"provider": "test"}
+        result = plan()
+        if not has_phases:
+            result.tasks[0].phases = []
+            result.stateful_limitation = "首页没有可验证的跨页状态入口，未执行状态切换。"
+        return result, {"provider": "test"}
 
     monkeypatch.setattr(LLM, "structured", structured)
     root = make_repository(tmp_path / "repo")
@@ -60,12 +65,16 @@ async def test_discovery_persists_phases_and_independent_mobile_matrix(tmp_path,
     assert captured[0][0] is StatefulProjectPlan
     assert captured[0][1]["devices"] == ["desktop", "android"]
     assert [t.id for t in config.tasks] == ["handoff-desktop", "handoff-android"]
-    assert all(len(t.phases) == 4 for t in config.tasks)
-    assert config.tasks[0].phases[0] is not config.tasks[1].phases[0]
+    assert all(len(t.phases) == (4 if has_phases else 0) for t in config.tasks)
+    if has_phases:
+        assert config.tasks[0].phases[0] is not config.tasks[1].phases[0]
+    else:
+        assert config.coverage_limitations == ["首页没有可验证的跨页状态入口，未执行状态切换。"]
     saved = load_config(project / "project.yaml")
     assert saved.tasks[1].browser.device == "android"
     assert saved.tasks[1].invariants[0].required is True
-    assert json.loads((project / "plan.json").read_text())["stateful_task_count"] == 2
+    assert json.loads((project / "plan.json").read_text())["stateful_task_count"] == (2 if has_phases else 0)
+    assert saved.coverage_limitations == config.coverage_limitations
 
 
 def test_planner_cannot_silently_omit_stateful_coverage():

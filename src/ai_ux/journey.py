@@ -59,6 +59,7 @@ async def explore(llm, runtime, task, evidence, system, policy, *, phases, invar
             "id": phase.id,
             "role": phase.role,
             "goal": phase.goal,
+            "expected_outcome": phase.expected_outcome,
             "started_ms": start_ms,
             "status": "running",
             "observations": [],
@@ -99,8 +100,16 @@ async def explore(llm, runtime, task, evidence, system, policy, *, phases, invar
                 "remaining_steps": task.max_steps - used,
             }
             if task.phases:
-                data["current_phase"] = {"id": phase.id, "goal": phase.goal, "role": phase.role}
-                data["journey"] = [{"id": p.id, "role": p.role, "goal": p.goal} for p in task.phases]
+                data["current_phase"] = {
+                    "id": phase.id,
+                    "goal": phase.goal,
+                    "role": phase.role,
+                    "expected_outcome": phase.expected_outcome,
+                }
+                data["journey"] = [
+                    {"id": p.id, "role": p.role, "goal": p.goal, "expected_outcome": p.expected_outcome}
+                    for p in task.phases
+                ]
                 data["phase_history"] = [
                     {"id": p["id"], "goal": p["goal"], "visited_urls": p.get("visited_urls", [])}
                     for p in phases

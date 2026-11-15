@@ -190,7 +190,14 @@ async def discover(
         ]
         if devices:
             tasks = expand_tasks(tasks, browser, devices)
-        config = Config(app=app, models=models, browser=browser, output_dir=str(root / "runs"), tasks=tasks)
+        config = Config(
+            app=app,
+            models=models,
+            browser=browser,
+            output_dir=str(root / "runs"),
+            tasks=tasks,
+            coverage_limitations=[plan.stateful_limitation] if plan.stateful_limitation else [],
+        )
         # Explicitly validate paths against navigation policy; task data never supplies navigation authority.
         for t in tasks:
             Policy(app).check_url(t.start_path)

@@ -193,9 +193,19 @@ def test_report_keeps_initial_failure_and_recovery_visible(tmp_path):
         },
         "verification": {"task_outcome": "failed", "recovery_outcome": "passed"},
     }
-    render(tmp_path, {"batch_id": "test", "target_url": "https://example.test", "runs": [run], "issues": []})
+    render(
+        tmp_path,
+        {
+            "batch_id": "test",
+            "target_url": "https://example.test",
+            "runs": [run],
+            "issues": [],
+            "coverage_limitations": ["<missing>状态切换入口未覆盖"],
+        },
+    )
     body = (tmp_path / "report.html").read_text()
     assert "<script>failure" not in body and "&lt;script&gt;" in body
     assert "failed" in body and "passed" in body and "未复核" in body
     assert "模拟环境" in body and "x/phases/retry.json" in body
     assert "连续流程与恢复验收" in (tmp_path / "report.md").read_text()
+    assert "未完成的请求覆盖" in body and "&lt;missing&gt;状态切换入口未覆盖" in body

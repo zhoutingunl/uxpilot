@@ -278,6 +278,7 @@ class Config(StrictModel):
     browser: Browser = Field(default_factory=Browser)
     speech: Speech | None = None
     ux_review: UXReview = Field(default_factory=UXReview)
+    coverage_limitations: list[str] = Field(default_factory=list, max_length=12)
     output_dir: str = "artifacts/agent"
     tasks: list[Task]
 

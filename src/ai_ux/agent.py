@@ -349,6 +349,7 @@ async def run_task(
                             "id": phase.id,
                             "role": phase.role,
                             "goal": phase.goal,
+                            "expected_outcome": phase.expected_outcome,
                             "status": "blocked",
                             "reason": result["stop_reason"],
                             "verification": {"task_outcome": "not_verified", "checks": []},
@@ -454,6 +455,7 @@ async def evaluate(
         "target_url": config.app.base_url,
         "repository": repository.metadata() if repository else None,
         "analysis_replay_url": report_base_url,
+        "coverage_limitations": config.coverage_limitations,
         "runs": [],
         "issues": [],
     }

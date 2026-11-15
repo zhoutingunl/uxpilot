@@ -60,6 +60,9 @@ def render(root: Path, report: dict):
             f"源码版本：{report['repository'].get('commit') or '非 Git 目录'}；工作区修改：{report['repository'].get('dirty')}。源码与部署版本关系未知。",
             "",
         ]
+    if report.get("coverage_limitations"):
+        lines += ["", "## 未完成的请求覆盖", ""]
+        lines += [f"- {limitation}" for limitation in report["coverage_limitations"]]
     lines += ["", "## 任务观察", ""]
     for r in report["runs"]:
         lines += [
@@ -232,6 +235,10 @@ def render(root: Path, report: dict):
     replay_href = report.get("analysis_replay_url") or "analysis-replay.html"
     body.append(f'<p><a href="{html.escape(replay_href, quote=True)}">分析回放 · 人工审核过程</a></p>')
     body.append('<p><a href="report.md">Markdown 报告</a> · <a href="report.json">JSON 报告</a></p>')
+    if report.get("coverage_limitations"):
+        body.append("<section><h2>未完成的请求覆盖</h2>")
+        body.extend(f"<p>{html.escape(item)}</p>" for item in report["coverage_limitations"])
+        body.append("</section>")
     for r in report["runs"]:
         rid = html.escape(r["run_id"], quote=True)
         body.append(
